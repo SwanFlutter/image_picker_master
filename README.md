@@ -65,7 +65,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  image_picker_master: ^1.0.0
+  image_picker_master: ^0.0.1
 ```
 
 Then run:

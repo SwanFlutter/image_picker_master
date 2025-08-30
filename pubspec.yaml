@@ -1,7 +1,7 @@
 name: image_picker_master
 description: "A comprehensive Flutter plugin for picking images, videos, audio files, documents, and any file type, multiple selection, and file categorization."
 version: 0.0.1
-homepage:
+homepage: "https://github.com/SwanFlutter/image_picker_master.git"
 
 environment:
   sdk: ^3.9.0
