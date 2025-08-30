@@ -1,6 +1,7 @@
 // lib/image_picker_master_method_channel.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
 import 'image_picker_master_platform_interface.dart';
 import 'src/tools/file_picker_options.dart';
 import 'src/tools/picked_file.dart';
@@ -17,6 +18,7 @@ class MethodChannelImagePickerMaster extends ImagePickerMasterPlatform {
     return version;
   }
 
+  @override
   Future<List<PickedFile>?> pickFiles(FilePickerOptions options) async {
     try {
       final result = await methodChannel.invokeMethod<List<dynamic>>(
@@ -37,6 +39,7 @@ class MethodChannelImagePickerMaster extends ImagePickerMasterPlatform {
     }
   }
 
+  @override
   Future<void> clearTemporaryFiles() async {
     try {
       await methodChannel.invokeMethod('clearTemporaryFiles');

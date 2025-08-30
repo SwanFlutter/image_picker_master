@@ -3,9 +3,9 @@ import 'src/tools/file_picker_options.dart';
 import 'src/tools/file_type.dart';
 import 'src/tools/picked_file.dart';
 
-export 'src/tools/picked_file.dart';
-export 'src/tools/file_type.dart';
 export 'src/tools/file_picker_options.dart';
+export 'src/tools/file_type.dart';
+export 'src/tools/picked_file.dart';
 
 class ImagePickerMaster {
   static ImagePickerMaster? _instance;

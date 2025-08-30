@@ -7,6 +7,8 @@ void main() {
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -21,8 +23,10 @@ class MyApp extends StatelessWidget {
 }
 
 class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key});
+
   @override
-  _MyHomePageState createState() => _MyHomePageState();
+  State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
@@ -209,8 +213,9 @@ class _MyHomePageState extends State<MyHomePage> {
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024)
+    if (bytes < 1024 * 1024 * 1024) {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
@@ -240,7 +245,8 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      print('Error picking image: $e'); // پرینت خطا
+      debugPrint('Error picking image: $e'); // پرینت خطا
+
       _showError('Error picking image: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -261,7 +267,7 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      print('Error picking images: $e'); // پرینت خطا
+      debugPrint('Error picking images: $e'); // پرینت خطا
       _showError('Error picking images: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -278,7 +284,7 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      print('Error picking video: $e'); // پرینت خطا
+      debugPrint('Error picking video: $e'); // پرینت خطا
       _showError('Error picking video: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -295,7 +301,7 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      print('Error picking videos: $e'); // پرینت خطا
+      debugPrint('Error picking videos: $e'); // پرینت خطا
       _showError('Error picking videos: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -312,7 +318,7 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      print('Error picking audio: $e'); // پرینت خطا
+      debugPrint('Error picking audio: $e'); // پرینت خطا
       _showError('Error picking audio: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -332,7 +338,7 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      print('Error picking documents: $e'); // پرینت خطا
+      debugPrint('Error picking documents: $e'); // پرینت خطا
       _showError('Error picking documents: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -352,7 +358,7 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      print('Error picking files: $e'); // پرینت خطا
+      debugPrint('Error picking files: $e'); // پرینت خطا
       _showError('Error picking files: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -373,7 +379,7 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      print('Error picking custom files: $e'); // پرینت خطا
+      debugPrint('Error picking custom files: $e'); // پرینت خطا
       _showError('Error picking custom files: $e');
     } finally {
       setState(() => _isLoading = false);
