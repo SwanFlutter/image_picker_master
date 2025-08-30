@@ -16,9 +16,15 @@ import 'src/tools/file_picker_options.dart';
 import 'src/tools/file_type.dart';
 import 'src/tools/picked_file.dart';
 
+/// A web implementation of [ImagePickerMasterPlatform] that uses HTML file input elements.
+///
+/// This implementation provides file picking functionality for web platforms
+/// using the browser's native file selection dialog.
 class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
+  /// Creates a new instance of [ImagePickerMasterWeb].
   ImagePickerMasterWeb();
 
+  /// Registers this class as the default instance of [ImagePickerMasterPlatform].
   static void registerWith(Registrar registrar) {
     ImagePickerMasterPlatform.instance = ImagePickerMasterWeb();
   }
@@ -78,7 +84,7 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
       });
 
       // Handle cancel (when user closes dialog without selecting)
-      final cancelTimer = Timer(Duration(minutes: 5), () {
+      final cancelTimer = Timer(const Duration(minutes: 5), () {
         if (!completer.isCompleted) {
           input.remove();
           completer.complete(null);
@@ -87,7 +93,7 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
 
       // Detect window focus to handle cancel
       html.window.onFocus.listen((event) {
-        Timer(Duration(milliseconds: 500), () {
+        Timer(const Duration(milliseconds: 500), () {
           if (!completer.isCompleted && (input.files?.isEmpty ?? true)) {
             cancelTimer.cancel();
             input.remove();

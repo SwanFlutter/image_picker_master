@@ -6,7 +6,12 @@ import 'image_picker_master_platform_interface.dart';
 import 'src/tools/file_picker_options.dart';
 import 'src/tools/picked_file.dart';
 
+/// An implementation of [ImagePickerMasterPlatform] that uses method channels.
+///
+/// This class handles communication between the Dart code and the native
+/// platform implementations through Flutter's method channel system.
 class MethodChannelImagePickerMaster extends ImagePickerMasterPlatform {
+  /// The method channel used to interact with the native platform.
   @visibleForTesting
   final methodChannel = const MethodChannel('image_picker_master');
 

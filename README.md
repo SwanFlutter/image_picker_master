@@ -65,7 +65,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  image_picker_master: ^0.0.1
+  image_picker_master: ^0.0.2
 ```
 
 Then run:
@@ -202,10 +202,14 @@ See the [example](example/) directory for a complete sample application demonstr
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for version history and updates.
+
+
+## Additional information
+
+If you have any issues, questions, or suggestions related to this package, please feel free to contact us at [swan.dev1993@gmail.com](mailto:swan.dev1993@gmail.com). We welcome your feedback and will do our best to address any problems or provide assistance.
+For more information about this package, you can also visit our [GitHub repository](https://pub.dev/packages/image_picker_master) where you can find additional resources, contribute to the package's development, and file issues or bug reports. We appreciate your contributions and feedback, and we aim to make this package as useful as possible for our users.
+Thank you for using our package, and we look forward to hearing from you!
