@@ -41,6 +41,13 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
             clearTemporaryFiles()
             result(nil)
 
+        case "capturePhoto":
+            guard let arguments = call.arguments as? [String: Any] else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments", details: nil))
+                return
+            }
+            capturePhoto(arguments: arguments)
+
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -297,6 +304,33 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
             try? FileManager.default.removeItem(at: url)
         }
         temporaryFiles.removeAll()
+    }
+
+    private func capturePhoto(arguments: [String: Any]) {
+        allowCompression = arguments["allowCompression"] as? Bool ?? false
+        withData = arguments["withData"] as? Bool ?? false
+        
+        if let quality = arguments["compressionQuality"] as? Int {
+            compressionQuality = CGFloat(quality) / 100.0
+        }
+        
+        guard let viewController = UIApplication.shared.keyWindow?.rootViewController else {
+            result?(FlutterError(code: "NO_VIEW_CONTROLLER", message: "Cannot find view controller", details: nil))
+            return
+        }
+        
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            result?(FlutterError(code: "CAMERA_NOT_AVAILABLE", message: "Camera not available", details: nil))
+            return
+        }
+        
+        let imagePicker = UIImagePickerController()
+        imagePicker.sourceType = .camera
+        imagePicker.mediaTypes = [kUTTypeImage as String]
+        imagePicker.delegate = self
+        imagePicker.allowsEditing = false
+        
+        viewController.present(imagePicker, animated: true)
     }
 }
 

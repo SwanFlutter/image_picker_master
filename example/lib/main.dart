@@ -1,6 +1,7 @@
 // example/lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:image_picker_master/image_picker_master.dart';
+import 'package:permission_master/permission_master.dart';
 
 void main() {
   runApp(MyApp());
@@ -119,6 +120,12 @@ class _MyHomePageState extends State<MyHomePage> {
           Icons.extension,
           () => _pickCustomFiles(),
           Colors.indigo,
+        ),
+        _buildPickButton(
+          'Capture Photo',
+          Icons.camera_alt,
+          () => _capturePhoto(),
+          Colors.deepOrange,
         ),
       ],
     );
@@ -381,6 +388,42 @@ class _MyHomePageState extends State<MyHomePage> {
     } catch (e) {
       debugPrint('Error picking custom files: $e'); // پرینت خطا
       _showError('Error picking custom files: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _capturePhoto() async {
+    setState(() => _isLoading = true);
+    try {
+      // بررسی و درخواست پرمیشن دوربین
+      final permissionMaster = PermissionMaster();
+      final cameraPermission = await permissionMaster.requestCameraPermission();
+      
+      if (cameraPermission != PermissionStatus.granted) {
+        _showError('Camera permission is required to take photos');
+        return;
+      }
+      
+      final file = await _picker.capturePhoto(
+        allowCompression: true,
+        compressionQuality: 85,
+        withData: true,
+      );
+      if (file != null) {
+        setState(() {
+          _selectedFiles.add(file);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Photo captured successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error capturing photo: $e');
+      _showError('Error capturing photo: $e');
     } finally {
       setState(() => _isLoading = false);
     }

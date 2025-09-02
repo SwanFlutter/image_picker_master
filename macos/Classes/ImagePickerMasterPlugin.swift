@@ -1,8 +1,9 @@
 import Cocoa
 import FlutterMacOS
 import UniformTypeIdentifiers
+import AVFoundation
 
-public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
+public class ImagePickerMasterPlugin: NSObject, FlutterPlugin, AVCapturePhotoCaptureDelegate {
     private var channel: FlutterMethodChannel?
     private var result: FlutterResult?
     private var allowMultiple = false
@@ -37,6 +38,13 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
         case "clearTemporaryFiles":
             clearTemporaryFiles()
             result(nil)
+
+        case "capturePhoto":
+            guard let arguments = call.arguments as? [String: Any] else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments", details: nil))
+                return
+            }
+            capturePhoto(arguments: arguments)
 
         default:
             result(FlutterMethodNotImplemented)
@@ -274,4 +282,160 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
         }
         temporaryFiles.removeAll()
     }
-}
+
+    private func capturePhoto(arguments: [String: Any]) {
+        allowCompression = arguments["allowCompression"] as? Bool ?? false
+        withData = arguments["withData"] as? Bool ?? false
+        
+        if let quality = arguments["compressionQuality"] as? Int {
+            compressionQuality = Double(quality) / 100.0
+        }
+        
+        // Check camera permission
+        let authStatus = AVCaptureDevice.authorizationStatus(for: .video)
+        
+        switch authStatus {
+        case .authorized:
+            DispatchQueue.main.async {
+                self.showCameraCapture()
+            }
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        self.showCameraCapture()
+                    } else {
+                        self.result?(FlutterError(code: "CAMERA_PERMISSION_DENIED", message: "Camera permission denied", details: nil))
+                    }
+                }
+            }
+        case .denied, .restricted:
+            result?(FlutterError(code: "CAMERA_PERMISSION_DENIED", message: "Camera permission denied", details: nil))
+        @unknown default:
+            result?(FlutterError(code: "CAMERA_PERMISSION_UNKNOWN", message: "Unknown camera permission status", details: nil))
+        }
+    }
+    
+    private func showCameraCapture() {
+        // For macOS, we'll use a simple approach with AVCaptureSession
+        // This is a basic implementation - in a real app you might want a more sophisticated UI
+        
+        guard let captureDevice = AVCaptureDevice.default(for: .video) else {
+            result?(FlutterError(code: "NO_CAMERA", message: "No camera available", details: nil))
+            return
+        }
+        
+        do {
+            let captureSession = AVCaptureSession()
+            let input = try AVCaptureDeviceInput(device: captureDevice)
+            
+            if captureSession.canAddInput(input) {
+                captureSession.addInput(input)
+            }
+            
+            let photoOutput = AVCapturePhotoOutput()
+            if captureSession.canAddOutput(photoOutput) {
+                captureSession.addOutput(photoOutput)
+            }
+            
+            // Create a simple capture window
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
+                                styleMask: [.titled, .closable],
+                                backing: .buffered,
+                                defer: false)
+            window.title = "Capture Photo"
+            window.center()
+            
+            let previewView = AVCaptureVideoPreviewView(frame: window.contentView!.bounds)
+            previewView.session = captureSession
+            window.contentView?.addSubview(previewView)
+            
+            // Add capture button
+            let captureButton = NSButton(frame: NSRect(x: 270, y: 20, width: 100, height: 30))
+            captureButton.title = "Capture"
+            captureButton.target = self
+            captureButton.action = #selector(capturePhotoAction)
+            window.contentView?.addSubview(captureButton)
+            
+            // Store references for later use
+            objc_setAssociatedObject(self, "captureSession", captureSession, .OBJC_ASSOCIATION_RETAIN)
+            objc_setAssociatedObject(self, "photoOutput", photoOutput, .OBJC_ASSOCIATION_RETAIN)
+            objc_setAssociatedObject(self, "captureWindow", window, .OBJC_ASSOCIATION_RETAIN)
+            
+            window.makeKeyAndOrderFront(nil)
+            captureSession.startRunning()
+            
+        } catch {
+            result?(FlutterError(code: "CAMERA_SETUP_ERROR", message: "Failed to setup camera: \(error.localizedDescription)", details: nil))
+        }
+    }
+    
+    @objc private func capturePhotoAction() {
+         guard let photoOutput = objc_getAssociatedObject(self, "photoOutput") as? AVCapturePhotoOutput else { return }
+         
+         let settings = AVCapturePhotoSettings()
+         photoOutput.capturePhoto(with: settings, delegate: self)
+     }
+     
+     // MARK: - AVCapturePhotoCaptureDelegate
+     public func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+         // Close the capture window
+         if let window = objc_getAssociatedObject(self, "captureWindow") as? NSWindow {
+             window.close()
+         }
+         
+         // Stop the capture session
+         if let session = objc_getAssociatedObject(self, "captureSession") as? AVCaptureSession {
+             session.stopRunning()
+         }
+         
+         if let error = error {
+             result?(FlutterError(code: "CAPTURE_ERROR", message: "Failed to capture photo: \(error.localizedDescription)", details: nil))
+             return
+         }
+         
+         guard let imageData = photo.fileDataRepresentation() else {
+             result?(FlutterError(code: "NO_IMAGE_DATA", message: "Failed to get image data", details: nil))
+             return
+         }
+         
+         let fileName = "photo_\(Date().timeIntervalSince1970).jpg"
+         var finalImageData = imageData
+         
+         // Apply compression if needed
+         if allowCompression {
+             finalImageData = compressImageData(imageData) ?? imageData
+         }
+         
+         // Save to temporary file
+         let tempURL = saveDataToTemporaryFile(data: finalImageData, fileName: fileName)
+         
+         var fileData: [String: Any] = [
+             "path": tempURL.path,
+             "name": fileName,
+             "size": finalImageData.count,
+             "mimeType": "image/jpeg"
+         ]
+         
+         if withData {
+             fileData["bytes"] = FlutterStandardTypedData(bytes: finalImageData)
+         }
+         
+         result?([fileData])
+     }
+     
+     private func saveDataToTemporaryFile(data: Data, fileName: String) -> URL {
+         let tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("file_picker")
+         
+         if !FileManager.default.fileExists(atPath: tempDirectory.path) {
+             try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+         }
+         
+         let tempURL = tempDirectory.appendingPathComponent("\(UUID().uuidString)_\(fileName)")
+         temporaryFiles.append(tempURL)
+         
+         try? data.write(to: tempURL)
+         
+         return tempURL
+     }
+ }

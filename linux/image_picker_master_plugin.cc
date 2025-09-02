@@ -41,6 +41,7 @@ static FlMethodResponse* create_error_response(const std::string& code, const st
 
 // Method handlers
 static FlMethodResponse* handle_pick_files(FlValue* arguments);
+static FlMethodResponse* handle_capture_photo(FlValue* arguments);
 static void show_file_picker(
     const std::string& file_type,
     bool allow_multiple,
@@ -63,6 +64,8 @@ static void image_picker_master_plugin_handle_method_call(
     response = get_platform_version();
   } else if (strcmp(method, "pickFiles") == 0) {
     response = handle_pick_files(arguments);
+  } else if (strcmp(method, "capturePhoto") == 0) {
+    response = handle_capture_photo(arguments);
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
   }
@@ -379,6 +382,15 @@ static FlMethodResponse* create_error_response(const std::string& code, const st
   fl_value_set_string_take(error_details, "message", fl_value_new_string(message.c_str()));
   
   return FL_METHOD_RESPONSE(fl_method_error_response_new(code.c_str(), message.c_str(), error_details));
+}
+
+static FlMethodResponse* handle_capture_photo(FlValue* arguments) {
+  // For Linux, camera capture requires additional dependencies like GStreamer or V4L2
+  // This is a simplified implementation that returns an error indicating camera capture
+  // is not directly supported without additional system dependencies
+  
+  return create_error_response("CAMERA_NOT_SUPPORTED", 
+                              "Camera capture is not directly supported on Linux without additional dependencies. Please use file picker to select images.");
 }
 
 static void image_picker_master_plugin_dispose(GObject* object) {

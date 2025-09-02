@@ -50,6 +50,18 @@ abstract class ImagePickerMasterPlatform extends PlatformInterface {
     throw UnimplementedError('pickFiles() has not been implemented.');
   }
 
+  /// Captures a photo using the device camera.
+  ///
+  /// Platform implementations should override this method to handle
+  /// camera capture on their respective platforms.
+  Future<PickedFile?> capturePhoto({
+    required bool allowCompression,
+    required int compressionQuality,
+    required bool withData,
+  }) {
+    throw UnimplementedError('capturePhoto() has not been implemented.');
+  }
+
   /// Clears all temporary files created by the plugin.
   ///
   /// Platform implementations should override this method to clean up

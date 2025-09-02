@@ -321,6 +321,42 @@ class ImagePickerMaster {
     );
   }
 
+  /// Captures a photo using the device camera.
+  ///
+  /// Opens the camera interface and allows the user to take a photo.
+  /// Returns a [PickedFile] object containing the captured image or null if cancelled.
+  ///
+  /// [allowCompression] enables image compression (default: true).
+  /// [compressionQuality] sets the compression quality from 0-100 (default: 80).
+  /// [withData] includes file bytes in the result when set to true.
+  ///
+  /// Returns a [PickedFile] object or null if no photo was captured.
+  ///
+  /// Supported on all platforms: Android, iOS, macOS, Windows, Web
+  ///
+  /// Example:
+  /// ```dart
+  /// final photo = await ImagePickerMaster.instance.capturePhoto(
+  ///   allowCompression: true,
+  ///   compressionQuality: 85,
+  /// );
+  /// if (photo != null) {
+  ///   print('Captured photo: ${photo.path}');
+  ///   print('File size: ${photo.size} bytes');
+  /// }
+  /// ```
+  Future<PickedFile?> capturePhoto({
+    bool allowCompression = true,
+    int compressionQuality = 80,
+    bool withData = false,
+  }) async {
+    return ImagePickerMasterPlatform.instance.capturePhoto(
+      allowCompression: allowCompression,
+      compressionQuality: compressionQuality,
+      withData: withData,
+    );
+  }
+
   /// Clears all temporary files created by the plugin.
   ///
   /// This method should be called periodically to free up storage space

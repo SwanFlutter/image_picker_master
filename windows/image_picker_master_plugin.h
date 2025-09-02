@@ -52,6 +52,10 @@ namespace image_picker_master {
                 const flutter::EncodableMap& arguments,
                 std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 
+        void CapturePhoto(
+                const flutter::EncodableMap& arguments,
+                std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
         void ShowFilePicker(
                 const std::string& file_type,
                 bool allow_multiple,

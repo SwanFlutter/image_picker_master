@@ -19,6 +19,15 @@ class MockImagePickerMasterPlatform
   Future<List<PickedFile>?> pickFiles(FilePickerOptions options) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<PickedFile?> capturePhoto({
+    required bool allowCompression,
+    required int compressionQuality,
+    required bool withData,
+  }) {
+    throw UnimplementedError();
+  }
 }
 
 void main() {

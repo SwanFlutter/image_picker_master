@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -19,6 +20,7 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.PluginRegistry
 import java.io.*
+import java.text.SimpleDateFormat
 import java.util.*
 
 class ImagePickerMasterPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, PluginRegistry.ActivityResultListener {
@@ -33,6 +35,7 @@ class ImagePickerMasterPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private var allowCompression = false
     private var compressionQuality = 80
     private val temporaryFiles = mutableListOf<File>()
+    private var photoUri: Uri? = null
 
     companion object {
         private const val REQUEST_CODE_PICK_FILE = 1001
@@ -47,8 +50,8 @@ class ImagePickerMasterPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
+        Log.d("ImagePickerMaster", "Method called: ${call.method}")
         this.result = result
-
         when (call.method) {
             "getPlatformVersion" -> {
                 result.success("Android ${android.os.Build.VERSION.RELEASE}")
@@ -56,6 +59,10 @@ class ImagePickerMasterPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             "pickFiles" -> {
                 val arguments = call.arguments as Map<*, *>
                 pickFiles(arguments)
+            }
+            "capturePhoto" -> {
+                val arguments = call.arguments as Map<*, *>
+                capturePhoto(arguments)
             }
             "clearTemporaryFiles" -> {
                 clearTemporaryFiles()
@@ -65,6 +72,67 @@ class ImagePickerMasterPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 result.notImplemented()
             }
         }
+    }
+
+    private fun capturePhoto(arguments: Map<*, *>) {
+        Log.d("ImagePickerMaster", "capturePhoto called with arguments: $arguments")
+        
+        if (activity == null) {
+            Log.e("ImagePickerMaster", "Activity is null")
+            result?.error("NO_ACTIVITY", "Activity is null", null)
+            return
+        }
+        
+        Log.d("ImagePickerMaster", "Activity is available, proceeding with photo capture")
+        this.result = result
+
+        // استخراج تنظیمات
+        allowCompression = arguments["allowCompression"] as? Boolean ?: false
+        compressionQuality = arguments["compressionQuality"] as? Int ?: 80
+        withData = arguments["withData"] as? Boolean ?: false
+
+        // ایجاد فایل موقت برای ذخیره عکس
+        val photoFile = createImageFile()
+        photoUri = FileProvider.getUriForFile(
+            activity!!,
+            "${activity!!.packageName}.fileprovider",
+            photoFile
+        )
+
+        // ایجاد Intent برای دوربین
+        val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+        takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri)
+
+        // بررسی وجود دوربین
+        Log.d("ImagePickerMaster", "Checking camera availability")
+        if (takePictureIntent.resolveActivity(activity!!.packageManager) != null) {
+            Log.d("ImagePickerMaster", "Camera app found, starting camera activity")
+            try {
+                activity?.startActivityForResult(takePictureIntent, REQUEST_CODE_CAPTURE_IMAGE)
+                Log.d("ImagePickerMaster", "Camera activity started successfully")
+            } catch (e: Exception) {
+                Log.e("ImagePickerMaster", "Error starting camera: ${e.message}")
+                result?.error("CAMERA_ERROR", "Cannot start camera: ${e.message}", null)
+            }
+        } else {
+            Log.e("ImagePickerMaster", "No camera app available")
+            result?.error("NO_CAMERA", "No camera app available", null)
+        }
+    }
+
+    private fun createImageFile(): File {
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val imageFileName = "JPEG_${timeStamp}_"
+        
+        val storageDir = File(activity?.cacheDir, "images")
+        if (!storageDir.exists()) {
+            storageDir.mkdirs()
+        }
+        
+        val imageFile = File.createTempFile(imageFileName, ".jpg", storageDir)
+        temporaryFiles.add(imageFile)
+        
+        return imageFile
     }
 
     private fun pickFiles(arguments: Map<*, *>) {
@@ -110,180 +178,180 @@ class ImagePickerMasterPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             "document" -> {
                 intent.type = "*/*"
                 val mimeTypes = arrayOf(
-// PDF
-"application/pdf",
-// Microsoft Office - Word
-"application/msword",
-"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-"application/vnd.ms-word.document.macroEnabled.12",
-"application/vnd.ms-word.template.macroEnabled.12",
-// Microsoft Office - Excel
-"application/vnd.ms-excel",
-"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-"application/vnd.ms-excel.sheet.macroEnabled.12",
-"application/vnd.ms-excel.template.macroEnabled.12",
-"application/vnd.ms-excel.addin.macroEnabled.12",
-"application/vnd.ms-excel.sheet.binary.macroEnabled.12",
-// Microsoft Office - PowerPoint
-"application/vnd.ms-powerpoint",
-"application/vnd.openxmlformats-officedocument.presentationml.presentation",
-"application/vnd.ms-powerpoint.presentation.macroEnabled.12",
-"application/vnd.ms-powerpoint.template.macroEnabled.12",
-"application/vnd.ms-powerpoint.slideshow.macroEnabled.12",
-"application/vnd.ms-powerpoint.addin.macroEnabled.12",
-// Text files
-"text/plain",
-"text/rtf",
-"application/rtf",
-"text/markdown",
-"text/x-markdown",
-"text/x-log",
-"text/x-script",
-// OpenDocument formats
-"application/vnd.oasis.opendocument.text",
-"application/vnd.oasis.opendocument.spreadsheet",
-"application/vnd.oasis.opendocument.presentation",
-"application/vnd.oasis.opendocument.graphics",
-"application/vnd.oasis.opendocument.formula",
-// Other document formats
-"application/vnd.google-apps.document",
-"application/vnd.google-apps.spreadsheet",
-"application/vnd.google-apps.presentation",
-"application/epub+zip",
-"application/x-iwork-pages-sffpages",
-"application/x-iwork-numbers-sffnumbers",
-"application/x-iwork-keynote-sffkey",
-"application/vnd.lotus-wordpro",
-"application/vnd.lotus-organizer",
-"application/vnd.lotus-screencam",
-"application/vnd.lotus-approach",
-"application/vnd.apple.pages",
-"application/vnd.apple.numbers",
-"application/vnd.apple.keynote",
-"application/x-abiword",
-// Archive formats
-"application/zip",
-"application/x-zip-compressed",
-"application/x-rar-compressed",
-"application/x-7z-compressed",
-"application/x-tar",
-"application/gzip",
-"application/x-gzip",
-"application/x-bzip",
-"application/x-bzip2",
-"application/x-freearc",
-"application/x-lzip",
-"application/x-lzma",
-"application/x-xz",
-"application/x-compress",
-"application/x-apple-diskimage",
-// Code files
-"text/html",
-"text/css",
-"text/javascript",
-"application/javascript",
-"application/json",
-"application/xml",
-"text/xml",
-"text/csv",
-"application/x-httpd-php",
-"text/x-python",
-"application/x-python-code",
-"text/x-c",
-"text/x-c++",
-"text/x-java-source",
-"application/ecmascript",
-"text/x-shellscript",
-"application/x-sh",
-"application/x-perl",
-"text/x-ruby",
-"application/x-ruby",
-"text/x-lua",
-"application/x-lua",
-"text/yaml",
-"application/x-yaml",
-// Image formats
-"image/jpeg",
-"image/png",
-"image/gif",
-"image/bmp",
-"image/tiff",
-"image/svg+xml",
-"image/webp",
-"image/x-icon",
-"image/vnd.microsoft.icon",
-"image/heic",
-"image/heif",
-"image/avif",
-"image/apng",
-"image/x-xbitmap",
-"image/x-portable-bitmap",
-"image/x-portable-graymap",
-"image/x-portable-pixmap",
-// Audio formats
-"audio/mpeg",
-"audio/wav",
-"audio/x-wav",
-"audio/ogg",
-"audio/aac",
-"audio/midi",
-"audio/x-midi",
-"audio/webm",
-"audio/opus",
-"audio/x-aiff",
-"audio/basic",
-// Video formats
-"video/mp4",
-"video/mpeg",
-"video/webm",
-"video/ogg",
-"video/quicktime",
-"video/x-msvideo",
-"video/x-flv",
-"video/x-m4v",
-"video/x-ms-wmv",
-"video/x-ms-asf",
-"video/3gpp",
-"video/3gpp2",
-// Font formats
-"font/otf",
-"font/ttf",
-"font/woff",
-"font/woff2",
-"application/vnd.ms-fontobject",
-"application/font-woff",
-// Other common formats
-"application/octet-stream",
-"application/x-shockwave-flash",
-"application/x-www-form-urlencoded",
-"multipart/form-data",
-"application/x-msdownload",
-"application/x-font-ttf",
-"application/x-font-otf",
-"application/x-font-woff",
-"application/vnd.amazon.ebook",
-"application/vnd.apple.installer+xml",
-"application/vnd.mozilla.xul+xml",
-"application/x-x509-ca-cert",
-"application/pkix-cert",
-"application/x-pkcs12",
-"application/x-pkcs7-certificates",
-"application/x-silverlight-app",
-"application/x-director",
-"application/x-dvi",
-"application/x-latex",
-"application/x-tex",
-"application/x-troff",
-"application/x-troff-man",
-"application/x-troff-me",
-"application/x-troff-ms",
-"application/x-www-form-urlencoded",
-"message/rfc822",
-"model/gltf+json",
-"model/gltf-binary",
-"model/obj",
-"model/stl"
-)
+                    // PDF
+                    "application/pdf",
+                    // Microsoft Office - Word
+                    "application/msword",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "application/vnd.ms-word.document.macroEnabled.12",
+                    "application/vnd.ms-word.template.macroEnabled.12",
+                    // Microsoft Office - Excel
+                    "application/vnd.ms-excel",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "application/vnd.ms-excel.sheet.macroEnabled.12",
+                    "application/vnd.ms-excel.template.macroEnabled.12",
+                    "application/vnd.ms-excel.addin.macroEnabled.12",
+                    "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+                    // Microsoft Office - PowerPoint
+                    "application/vnd.ms-powerpoint",
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+                    "application/vnd.ms-powerpoint.template.macroEnabled.12",
+                    "application/vnd.ms-powerpoint.slideshow.macroEnabled.12",
+                    "application/vnd.ms-powerpoint.addin.macroEnabled.12",
+                    // Text files
+                    "text/plain",
+                    "text/rtf",
+                    "application/rtf",
+                    "text/markdown",
+                    "text/x-markdown",
+                    "text/x-log",
+                    "text/x-script",
+                    // OpenDocument formats
+                    "application/vnd.oasis.opendocument.text",
+                    "application/vnd.oasis.opendocument.spreadsheet",
+                    "application/vnd.oasis.opendocument.presentation",
+                    "application/vnd.oasis.opendocument.graphics",
+                    "application/vnd.oasis.opendocument.formula",
+                    // Other document formats
+                    "application/vnd.google-apps.document",
+                    "application/vnd.google-apps.spreadsheet",
+                    "application/vnd.google-apps.presentation",
+                    "application/epub+zip",
+                    "application/x-iwork-pages-sffpages",
+                    "application/x-iwork-numbers-sffnumbers",
+                    "application/x-iwork-keynote-sffkey",
+                    "application/vnd.lotus-wordpro",
+                    "application/vnd.lotus-organizer",
+                    "application/vnd.lotus-screencam",
+                    "application/vnd.lotus-approach",
+                    "application/vnd.apple.pages",
+                    "application/vnd.apple.numbers",
+                    "application/vnd.apple.keynote",
+                    "application/x-abiword",
+                    // Archive formats
+                    "application/zip",
+                    "application/x-zip-compressed",
+                    "application/x-rar-compressed",
+                    "application/x-7z-compressed",
+                    "application/x-tar",
+                    "application/gzip",
+                    "application/x-gzip",
+                    "application/x-bzip",
+                    "application/x-bzip2",
+                    "application/x-freearc",
+                    "application/x-lzip",
+                    "application/x-lzma",
+                    "application/x-xz",
+                    "application/x-compress",
+                    "application/x-apple-diskimage",
+                    // Code files
+                    "text/html",
+                    "text/css",
+                    "text/javascript",
+                    "application/javascript",
+                    "application/json",
+                    "application/xml",
+                    "text/xml",
+                    "text/csv",
+                    "application/x-httpd-php",
+                    "text/x-python",
+                    "application/x-python-code",
+                    "text/x-c",
+                    "text/x-c++",
+                    "text/x-java-source",
+                    "application/ecmascript",
+                    "text/x-shellscript",
+                    "application/x-sh",
+                    "application/x-perl",
+                    "text/x-ruby",
+                    "application/x-ruby",
+                    "text/x-lua",
+                    "application/x-lua",
+                    "text/yaml",
+                    "application/x-yaml",
+                    // Image formats
+                    "image/jpeg",
+                    "image/png",
+                    "image/gif",
+                    "image/bmp",
+                    "image/tiff",
+                    "image/svg+xml",
+                    "image/webp",
+                    "image/x-icon",
+                    "image/vnd.microsoft.icon",
+                    "image/heic",
+                    "image/heif",
+                    "image/avif",
+                    "image/apng",
+                    "image/x-xbitmap",
+                    "image/x-portable-bitmap",
+                    "image/x-portable-graymap",
+                    "image/x-portable-pixmap",
+                    // Audio formats
+                    "audio/mpeg",
+                    "audio/wav",
+                    "audio/x-wav",
+                    "audio/ogg",
+                    "audio/aac",
+                    "audio/midi",
+                    "audio/x-midi",
+                    "audio/webm",
+                    "audio/opus",
+                    "audio/x-aiff",
+                    "audio/basic",
+                    // Video formats
+                    "video/mp4",
+                    "video/mpeg",
+                    "video/webm",
+                    "video/ogg",
+                    "video/quicktime",
+                    "video/x-msvideo",
+                    "video/x-flv",
+                    "video/x-m4v",
+                    "video/x-ms-wmv",
+                    "video/x-ms-asf",
+                    "video/3gpp",
+                    "video/3gpp2",
+                    // Font formats
+                    "font/otf",
+                    "font/ttf",
+                    "font/woff",
+                    "font/woff2",
+                    "application/vnd.ms-fontobject",
+                    "application/font-woff",
+                    // Other common formats
+                    "application/octet-stream",
+                    "application/x-shockwave-flash",
+                    "application/x-www-form-urlencoded",
+                    "multipart/form-data",
+                    "application/x-msdownload",
+                    "application/x-font-ttf",
+                    "application/x-font-otf",
+                    "application/x-font-woff",
+                    "application/vnd.amazon.ebook",
+                    "application/vnd.apple.installer+xml",
+                    "application/vnd.mozilla.xul+xml",
+                    "application/x-x509-ca-cert",
+                    "application/pkix-cert",
+                    "application/x-pkcs12",
+                    "application/x-pkcs7-certificates",
+                    "application/x-silverlight-app",
+                    "application/x-director",
+                    "application/x-dvi",
+                    "application/x-latex",
+                    "application/x-tex",
+                    "application/x-troff",
+                    "application/x-troff-man",
+                    "application/x-troff-me",
+                    "application/x-troff-ms",
+                    "application/x-www-form-urlencoded",
+                    "message/rfc822",
+                    "model/gltf+json",
+                    "model/gltf-binary",
+                    "model/obj",
+                    "model/stl"
+                )
                 intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes)
             }
             "custom" -> {
@@ -311,7 +379,22 @@ class ImagePickerMasterPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
-        if (requestCode != REQUEST_CODE_PICK_FILE || resultCode != Activity.RESULT_OK || data == null) {
+        when (requestCode) {
+            REQUEST_CODE_PICK_FILE -> {
+                return handlePickFileResult(resultCode, data)
+            }
+            REQUEST_CODE_CAPTURE_IMAGE -> {
+                return handleCaptureImageResult(resultCode)
+            }
+            else -> {
+                result?.success(null)
+                return true
+            }
+        }
+    }
+
+    private fun handlePickFileResult(resultCode: Int, data: Intent?): Boolean {
+        if (resultCode != Activity.RESULT_OK || data == null) {
             result?.success(null)
             return true
         }
@@ -333,6 +416,28 @@ class ImagePickerMasterPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             result?.success(selectedFiles)
         } catch (e: Exception) {
             result?.error("PROCESSING_ERROR", "Error processing selected files: ${e.message}", null)
+        }
+
+        return true
+    }
+
+    private fun handleCaptureImageResult(resultCode: Int): Boolean {
+        if (resultCode != Activity.RESULT_OK || photoUri == null) {
+            result?.success(null)
+            return true
+        }
+
+        try {
+            val capturedFile = processSelectedFile(photoUri!!)
+            if (capturedFile != null) {
+                result?.success(listOf(capturedFile))
+            } else {
+                result?.error("PROCESSING_ERROR", "Error processing captured image", null)
+            }
+        } catch (e: Exception) {
+            result?.error("PROCESSING_ERROR", "Error processing captured image: ${e.message}", null)
+        } finally {
+            photoUri = null
         }
 
         return true

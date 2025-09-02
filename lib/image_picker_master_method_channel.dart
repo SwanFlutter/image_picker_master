@@ -45,6 +45,32 @@ class MethodChannelImagePickerMaster extends ImagePickerMasterPlatform {
   }
 
   @override
+  Future<PickedFile?> capturePhoto({
+    required bool allowCompression,
+    required int compressionQuality,
+    required bool withData,
+  }) async {
+    try {
+      final result = await methodChannel.invokeMethod<List<dynamic>>(
+        'capturePhoto',
+        {
+          'allowCompression': allowCompression,
+          'compressionQuality': compressionQuality,
+          'withData': withData,
+        },
+      );
+
+      if (result == null || result.isEmpty) return null;
+
+      // Native code returns a List with one item, so we take the first element
+      final firstFile = result.first as Map<dynamic, dynamic>;
+      return PickedFile.fromMap(Map<String, dynamic>.from(firstFile));
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  @override
   Future<void> clearTemporaryFiles() async {
     try {
       await methodChannel.invokeMethod('clearTemporaryFiles');

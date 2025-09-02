@@ -89,6 +89,14 @@ namespace image_picker_master {
             CleanupTempFiles();
             result->Success();
         }
+        else if (method_call.method_name().compare("capturePhoto") == 0) {
+            const auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+            if (arguments) {
+                CapturePhoto(*arguments, std::move(result));
+            } else {
+                result->Error("INVALID_ARGUMENTS", "Invalid arguments provided");
+            }
+        }
         else {
             result->NotImplemented();
         }
@@ -650,6 +658,44 @@ namespace image_picker_master {
 
         free(pImageCodecInfo);
         return false;
+    }
+
+    void ImagePickerMasterPlugin::CapturePhoto(
+            const flutter::EncodableMap& arguments,
+            std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+        // Parse arguments
+        bool allow_compression = false;
+        int compression_quality = 80;
+        bool with_data = false;
+
+        auto compression_it = arguments.find(flutter::EncodableValue("allowCompression"));
+        if (compression_it != arguments.end()) {
+            if (const auto* compression_bool = std::get_if<bool>(&compression_it->second)) {
+                allow_compression = *compression_bool;
+            }
+        }
+
+        auto quality_it = arguments.find(flutter::EncodableValue("compressionQuality"));
+        if (quality_it != arguments.end()) {
+            if (const auto* quality_int = std::get_if<int>(&quality_it->second)) {
+                compression_quality = *quality_int;
+            }
+        }
+
+        auto with_data_it = arguments.find(flutter::EncodableValue("withData"));
+        if (with_data_it != arguments.end()) {
+            if (const auto* with_data_bool = std::get_if<bool>(&with_data_it->second)) {
+                with_data = *with_data_bool;
+            }
+        }
+
+        // For Windows, we'll use a simple approach - show a message to user
+        // that camera capture is not directly supported and suggest using file picker
+        // In a full implementation, you would use Windows Media Foundation or DirectShow
+        
+        // Create a temporary result indicating camera capture is not supported
+        result->Error("CAMERA_NOT_SUPPORTED", 
+                     "Camera capture is not directly supported on Windows. Please use file picker to select images.");
     }
 
     void ImagePickerMasterPlugin::SendError(

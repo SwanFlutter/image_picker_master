@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -117,6 +116,85 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
     return;
   }
 
+  @override
+  Future<PickedFile?> capturePhoto({
+    required bool allowCompression,
+    required int compressionQuality,
+    required bool withData,
+  }) async {
+    try {
+      // Check if getUserMedia is supported
+      if (!_isGetUserMediaSupported()) {
+        throw PlatformException(
+          code: 'CAMERA_NOT_SUPPORTED',
+          message: 'Camera access is not supported in this browser.',
+        );
+      }
+
+      // Request camera access
+      final stream = await html.window.navigator.mediaDevices?.getUserMedia({
+        'video': true,
+      });
+
+      if (stream == null) {
+        throw PlatformException(
+          code: 'CAMERA_ACCESS_DENIED',
+          message: 'Camera access was denied.',
+        );
+      }
+
+      // Create video element to display camera feed
+      final video = html.VideoElement()
+        ..srcObject = stream
+        ..autoplay = true
+        ..muted = true
+        ..style.width = '100%'
+        ..style.height = '100%';
+
+      // Create canvas for capturing
+      final canvas = html.CanvasElement();
+      final context = canvas.context2D;
+
+      // Create capture UI
+      final result = await _showCameraDialog(video, canvas, context, stream);
+
+      if (result != null) {
+        // Process the captured image
+        Uint8List imageBytes = result;
+
+        if (allowCompression) {
+          imageBytes = await _compressImage(imageBytes, compressionQuality);
+        }
+
+        // Generate a filename with timestamp
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final filename = 'captured_photo_$timestamp.jpg';
+
+        // Create object URL for the captured image
+        final blob = html.Blob([imageBytes], 'image/jpeg');
+        final objectUrl = html.Url.createObjectUrlFromBlob(blob);
+
+        return PickedFile(
+          path: objectUrl,
+          name: filename,
+          size: imageBytes.length,
+          mimeType: 'image/jpeg',
+          bytes: withData ? imageBytes : null,
+        );
+      }
+
+      return null;
+    } catch (e) {
+      if (e is PlatformException) {
+        rethrow;
+      }
+      throw PlatformException(
+        code: 'CAMERA_ERROR',
+        message: 'Failed to capture photo: $e',
+      );
+    }
+  }
+
   String _getAcceptString(FileType type, List<String>? allowedExtensions) {
     switch (type) {
       case FileType.image:
@@ -203,6 +281,125 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
 
   bool _isImageFile(String mimeType) {
     return mimeType.startsWith('image/');
+  }
+
+  bool _isGetUserMediaSupported() {
+    return html.window.navigator.mediaDevices != null;
+  }
+
+  Future<Uint8List?> _showCameraDialog(
+    html.VideoElement video,
+    html.CanvasElement canvas,
+    html.CanvasRenderingContext2D context,
+    html.MediaStream stream,
+  ) async {
+    final completer = Completer<Uint8List?>();
+
+    // Create modal dialog
+    final overlay = html.DivElement()
+      ..style.position = 'fixed'
+      ..style.top = '0'
+      ..style.left = '0'
+      ..style.width = '100%'
+      ..style.height = '100%'
+      ..style.backgroundColor = 'rgba(0, 0, 0, 0.8)'
+      ..style.zIndex = '9999'
+      ..style.display = 'flex'
+      ..style.alignItems = 'center'
+      ..style.justifyContent = 'center';
+
+    final dialog = html.DivElement()
+      ..style.backgroundColor = 'white'
+      ..style.borderRadius = '8px'
+      ..style.padding = '20px'
+      ..style.maxWidth = '90%'
+      ..style.maxHeight = '90%'
+      ..style.display = 'flex'
+      ..style.flexDirection = 'column'
+      ..style.alignItems = 'center';
+
+    final videoContainer = html.DivElement()
+      ..style.width = '400px'
+      ..style.height = '300px'
+      ..style.marginBottom = '20px'
+      ..style.border = '2px solid #ccc'
+      ..style.borderRadius = '4px'
+      ..style.overflow = 'hidden';
+
+    final buttonContainer = html.DivElement()
+      ..style.display = 'flex'
+      ..style.gap = '10px';
+
+    final captureButton = html.ButtonElement()
+      ..text = 'Capture Photo'
+      ..style.padding = '10px 20px'
+      ..style.backgroundColor = '#007bff'
+      ..style.color = 'white'
+      ..style.border = 'none'
+      ..style.borderRadius = '4px'
+      ..style.cursor = 'pointer';
+
+    final cancelButton = html.ButtonElement()
+      ..text = 'Cancel'
+      ..style.padding = '10px 20px'
+      ..style.backgroundColor = '#6c757d'
+      ..style.color = 'white'
+      ..style.border = 'none'
+      ..style.borderRadius = '4px'
+      ..style.cursor = 'pointer';
+
+    // Add elements to DOM
+    videoContainer.append(video);
+    buttonContainer.append(captureButton);
+    buttonContainer.append(cancelButton);
+    dialog.append(videoContainer);
+    dialog.append(buttonContainer);
+    overlay.append(dialog);
+    html.document.body?.append(overlay);
+
+    // Set up event listeners
+    captureButton.onClick.listen((event) {
+      try {
+        // Set canvas size to video size
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        // Draw current video frame to canvas
+        context.drawImage(video, 0, 0);
+
+        // Convert canvas to data URL
+        final dataUrl = canvas.toDataUrl('image/jpeg', 0.8);
+
+        if (dataUrl.contains(',')) {
+          final base64 = dataUrl.split(',')[1];
+          final imageBytes = base64Decode(base64);
+
+          // Stop camera stream
+          stream.getTracks().forEach((track) => track.stop());
+
+          // Remove dialog
+          overlay.remove();
+
+          completer.complete(imageBytes);
+        } else {
+          completer.complete(null);
+        }
+      } catch (e) {
+        completer.complete(null);
+      }
+    });
+
+    cancelButton.onClick.listen((event) {
+      // Stop camera stream
+      stream.getTracks().forEach((track) => track.stop());
+
+      // Remove dialog
+      overlay.remove();
+
+      completer.complete(null);
+    });
+
+    return completer.future;
   }
 
   Future<Uint8List> _compressImage(Uint8List imageBytes, int quality) async {
