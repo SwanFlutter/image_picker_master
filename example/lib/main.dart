@@ -1,7 +1,8 @@
 // example/lib/main.dart
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:image_picker_master/image_picker_master.dart';
-import 'package:permission_master/permission_master.dart';
 
 void main() {
   runApp(MyApp());
@@ -395,16 +396,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _capturePhoto() async {
     setState(() => _isLoading = true);
+
     try {
-      // بررسی و درخواست پرمیشن دوربین
-      final permissionMaster = PermissionMaster();
-      final cameraPermission = await permissionMaster.requestCameraPermission();
-      
-      if (cameraPermission != PermissionStatus.granted) {
-        _showError('Camera permission is required to take photos');
-        return;
-      }
-      
       final file = await _picker.capturePhoto(
         allowCompression: true,
         compressionQuality: 85,
@@ -420,12 +413,43 @@ class _MyHomePageState extends State<MyHomePage> {
             backgroundColor: Colors.green,
           ),
         );
+      } else {
+        _showError('Camera capture was cancelled or failed');
       }
     } catch (e) {
       debugPrint('Error capturing photo: $e');
-      _showError('Error capturing photo: $e');
+
+      // Parse the error to provide user-friendly messages
+      String userMessage = _getCameraErrorMessage(e.toString());
+      _showError(userMessage);
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  String _getCameraErrorMessage(String error) {
+    // Extract error code from PlatformException format
+    if (error.contains('NO_CAMERA_DEVICES_FOUND') ||
+        error.contains('NO_CAMERA_FOUND')) {
+      return 'هیچ دوربینی در سیستم یافت نشد. لطفاً دوربین را متصل کنید.';
+    } else if (error.contains('CAMERA_ACCESS_DENIED')) {
+      return 'دسترسی به دوربین رد شد. لطفاً مجوزهای دوربین را در تنظیمات ویندوز بررسی کنید.';
+    } else if (error.contains('CAMERA_IN_USE_BY_ANOTHER_APP')) {
+      return 'دوربین توسط برنامه دیگری استفاده می‌شود. لطفاً سایر برنامه‌های دوربین را ببندید.';
+    } else if (error.contains('CAMERA_DEVICE_DISCONNECTED') ||
+        error.contains('CAMERA_DEVICE_INVALIDATED')) {
+      return 'دوربین قطع شده یا از کار افتاده است. لطفاً اتصال دوربین را بررسی کنید.';
+    } else if (error.contains('MEDIA_FOUNDATION_ERROR')) {
+      return 'قابلیت دوربین در دسترس نیست. سیستم از دوربین پشتیبانی نمی‌کند.';
+    } else if (error.contains('CAMERA_STREAMING_START_FAILED')) {
+      return 'شروع پخش دوربین ناموفق بود. لطفاً دوربین را دوباره متصل کنید.';
+    } else if (error.contains('FRAME_CAPTURE_FAILED') ||
+        error.contains('CAMERA_NO_FRAME_AVAILABLE')) {
+      return 'عکس‌گیری ناموفق بود. لطفاً دوباره تلاش کنید.';
+    } else if (error.contains('CAMERA_CONFIGURATION_FAILED')) {
+      return 'تنظیم دوربین ناموفق بود. ممکن است دوربین سازگار نباشد.';
+    } else {
+      return 'خطای ناشناخته در دوربین رخ داد. لطفاً دوباره تلاش کنید.';
     }
   }
 

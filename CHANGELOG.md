@@ -7,3 +7,8 @@
 
 * Fix pub point.
 * Add document package.
+
+
+## 0.0.3
+
+* Add new methed for picker camera.

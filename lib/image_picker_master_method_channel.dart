@@ -51,14 +51,12 @@ class MethodChannelImagePickerMaster extends ImagePickerMasterPlatform {
     required bool withData,
   }) async {
     try {
-      final result = await methodChannel.invokeMethod<List<dynamic>>(
-        'capturePhoto',
-        {
-          'allowCompression': allowCompression,
-          'compressionQuality': compressionQuality,
-          'withData': withData,
-        },
-      );
+      final result = await methodChannel
+          .invokeMethod<List<dynamic>>('capturePhoto', {
+            'allowCompression': allowCompression,
+            'compressionQuality': compressionQuality,
+            'withData': withData,
+          });
 
       if (result == null || result.isEmpty) return null;
 

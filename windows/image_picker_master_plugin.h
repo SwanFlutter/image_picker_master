@@ -11,6 +11,22 @@
 #include <windows.h>
 #include <shobjidl.h>
 #include <versionhelpers.h>
+#include <mfapi.h>
+#include <mfidl.h>
+#include <mfreadwrite.h>
+#include <mferror.h>
+#include <wincodec.h>
+#include <comdef.h>
+
+#pragma comment(lib, "comdlg32.lib")
+#pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "gdiplus.lib")
+#pragma comment(lib, "rpcrt4.lib")  // UUID library
+#pragma comment(lib, "mf.lib")
+#pragma comment(lib, "mfplat.lib")
+#pragma comment(lib, "mfreadwrite.lib")
+#pragma comment(lib, "mfuuid.lib")
+#pragma comment(lib, "windowscodecs.lib")
 
 // Disable GDI+ warnings that are treated as errors
 #pragma warning(push)
@@ -43,6 +59,9 @@ namespace image_picker_master {
 
         // GDI+ token for image operations
         ULONG_PTR gdiplusToken_;
+        
+        // Media Foundation initialization flag
+        bool mf_initialized_;
 
         // Temporary files for cleanup
         std::vector<std::string> temporary_files_;
@@ -55,6 +74,20 @@ namespace image_picker_master {
         void CapturePhoto(
                 const flutter::EncodableMap& arguments,
                 std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+        // Camera capture helpers
+        bool InitializeMediaFoundation();
+        void ShutdownMediaFoundation();
+        bool CapturePhotoFromCamera(
+                const std::string& output_path,
+                bool allow_compression,
+                int compression_quality);
+        bool EnumerateCameras(std::vector<std::wstring>& camera_names);
+        bool CreateCameraSource(IMFMediaSource** ppSource);
+        bool ConfigureCameraSource(IMFMediaSource* pSource, IMFSourceReader** ppReader);
+        bool CaptureFrame(IMFSourceReader* pReader, const std::string& output_path);
+        bool SaveBitmapToFile(IWICBitmap* pBitmap, const std::string& file_path, int quality);
+        std::string GetCameraErrorMessage(const std::string& error_code);
 
         void ShowFilePicker(
                 const std::string& file_type,

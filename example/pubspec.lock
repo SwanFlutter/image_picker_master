@@ -104,7 +104,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "0.0.2"
+    version: "0.0.3"
   integration_test:
     dependency: "direct dev"
     description: flutter
@@ -174,14 +174,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.9.1"
-  permission_master:
-    dependency: "direct main"
-    description:
-      name: permission_master
-      sha256: "1ca1a8748a551563416c501d08bb94ea68d90bb775ac465aa065275deca906a6"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.8"
   platform:
     dependency: transitive
     description:
