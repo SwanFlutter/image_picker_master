@@ -25,6 +25,8 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
 
   /// Registers this class as the default instance of [ImagePickerMasterPlatform].
   static void registerWith(Registrar registrar) {
+    // For Flutter 3.9.0 and above, we don't use the registrar parameter
+    // as the plugin registration mechanism has changed
     ImagePickerMasterPlatform.instance = ImagePickerMasterWeb();
   }
 

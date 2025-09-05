@@ -52,17 +52,15 @@ class MethodChannelImagePickerMaster extends ImagePickerMasterPlatform {
   }) async {
     try {
       final result = await methodChannel
-          .invokeMethod<List<dynamic>>('capturePhoto', {
+          .invokeMethod<Map<dynamic, dynamic>>('capturePhoto', {
             'allowCompression': allowCompression,
             'compressionQuality': compressionQuality,
             'withData': withData,
           });
 
-      if (result == null || result.isEmpty) return null;
+      if (result == null) return null;
 
-      // Native code returns a List with one item, so we take the first element
-      final firstFile = result.first as Map<dynamic, dynamic>;
-      return PickedFile.fromMap(Map<String, dynamic>.from(firstFile));
+      return PickedFile.fromMap(Map<String, dynamic>.from(result));
     } on PlatformException {
       return null;
     }

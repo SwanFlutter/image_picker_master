@@ -12,9 +12,7 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
 
   /// Registers this class as the default instance of [ImagePickerMasterPlatform].
   static void registerWith(dynamic registrar) {
-    throw UnsupportedError(
-      'Web implementation is not supported on this platform',
-    );
+    // No-op for non-web platforms
   }
 
   @override

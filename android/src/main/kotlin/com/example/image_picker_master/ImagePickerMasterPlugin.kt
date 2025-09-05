@@ -430,7 +430,8 @@ class ImagePickerMasterPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         try {
             val capturedFile = processSelectedFile(photoUri!!)
             if (capturedFile != null) {
-                result?.success(listOf(capturedFile))
+                // Return a single Map instead of a List with one item to match Dart expectations
+                result?.success(capturedFile)
             } else {
                 result?.error("PROCESSING_ERROR", "Error processing captured image", null)
             }

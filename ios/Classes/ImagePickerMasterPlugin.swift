@@ -15,6 +15,37 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
     private var allowCompression = false
     private var compressionQuality: CGFloat = 0.8
     private var temporaryFiles: [URL] = []
+    // Track whether the current flow is capturePhoto (true) or pickFiles (false)
+    private var isCapturePhotoMode = false
+
+    // Scene-aware way to get the top-most view controller (iOS 13+ safe)
+    private func getRootViewController() -> UIViewController? {
+        if #available(iOS 13.0, *) {
+            let scenes = UIApplication.shared.connectedScenes
+                .filter { $0.activationState == .foregroundActive }
+                .compactMap { $0 as? UIWindowScene }
+            if let window = scenes.first?.windows.first(where: { $0.isKeyWindow }) ?? scenes.first?.windows.first {
+                return window.rootViewController
+            }
+            return UIApplication.shared.windows.first?.rootViewController
+        } else {
+            return UIApplication.shared.keyWindow?.rootViewController
+        }
+    }
+
+    private func topMostViewController(base: UIViewController?) -> UIViewController? {
+        guard let base = base else { return nil }
+        if let nav = base as? UINavigationController {
+            return topMostViewController(base: nav.visibleViewController)
+        }
+        if let tab = base as? UITabBarController {
+            return topMostViewController(base: tab.selectedViewController)
+        }
+        if let presented = base.presentedViewController {
+            return topMostViewController(base: presented)
+        }
+        return base
+    }
 
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "image_picker_master", binaryMessenger: registrar.messenger())
@@ -54,6 +85,8 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
     }
 
     private func pickFiles(arguments: [String: Any]) {
+        // Ensure we are not in capture mode for generic picking flows
+        isCapturePhotoMode = false
         fileType = arguments["type"] as? String ?? "all"
         allowMultiple = arguments["allowMultiple"] as? Bool ?? false
         allowedExtensions = arguments["allowedExtensions"] as? [String]
@@ -64,7 +97,7 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
             compressionQuality = CGFloat(quality) / 100.0
         }
 
-        guard let viewController = UIApplication.shared.keyWindow?.rootViewController else {
+        guard let viewController = topMostViewController(base: getRootViewController()) else {
             result?(FlutterError(code: "NO_VIEW_CONTROLLER", message: "Cannot find view controller", details: nil))
             return
         }
@@ -120,8 +153,16 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
         viewController.present(alertController, animated: true)
     }
 
-    @available(iOS 14.0, *)
     private func presentDocumentPicker(from viewController: UIViewController) {
+        if #available(iOS 14.0, *) {
+            presentModernDocumentPicker(from: viewController)
+        } else {
+            presentLegacyDocumentPicker(from: viewController)
+        }
+    }
+    
+    @available(iOS 14.0, *)
+    private func presentModernDocumentPicker(from viewController: UIViewController) {
         var contentTypes: [UTType] = []
 
         switch fileType {
@@ -132,59 +173,7 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
         case "audio":
             contentTypes = [.audio, .mp3, .wav, .aiff, .m4a]
         case "document":
-            contentTypes = [
-                // PDF
-                .pdf,
-                
-                // Microsoft Office - Word
-                .doc, .docx,
-                
-                // Microsoft Office - Excel
-                .xls, .xlsx,
-                
-                // Microsoft Office - PowerPoint
-                .ppt, .pptx,
-                
-                // Text files
-                .text, .plainText, .rtf,
-                
-                // OpenDocument formats
-                UTType("org.oasis-open.opendocument.text")!,
-                UTType("org.oasis-open.opendocument.spreadsheet")!,
-                UTType("org.oasis-open.opendocument.presentation")!,
-                
-                // Archive formats
-                .zip, .gzip,
-                UTType("com.rarlab.rar-archive")!,
-                UTType("org.7-zip.7-zip-archive")!,
-                
-                // Code files
-                .html, .css, .javascript, .json, .xml, .yaml,
-                UTType("public.php-script")!,
-                UTType("public.python-script")!,
-                UTType("public.c-source")!,
-                UTType("public.c-plus-plus-source")!,
-                UTType("com.sun.java-source")!,
-                UTType("public.shell-script")!,
-                UTType("public.perl-script")!,
-                UTType("public.ruby-script")!,
-                
-                // Image formats
-                .image, .jpeg, .png, .gif, .bmp, .tiff, .svg, .webP, .ico, .heic, .heif,
-                
-                // Audio formats
-                .audio, .mp3, .wav, .aiff, .m4a, .flac, .ogg,
-                
-                // Video formats
-                .movie, .video, .mpeg4Movie, .quickTimeMovie, .avi,
-                
-                // Font formats
-                UTType("public.truetype-ttf-font")!,
-                UTType("public.opentype-font")!,
-                
-                // Other formats
-                .data, .epub
-            ]
+            contentTypes = getDocumentUTTypes()
         case "custom":
             if let extensions = allowedExtensions {
                 contentTypes = extensions.compactMap { UTType(filenameExtension: $0) }
@@ -203,6 +192,236 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
 
         viewController.present(documentPicker, animated: true)
     }
+    
+    private func presentLegacyDocumentPicker(from viewController: UIViewController) {
+        var documentTypes: [String] = []
+        
+        switch fileType {
+        case "image":
+            documentTypes = [kUTTypeImage as String]
+        case "video":
+            documentTypes = [kUTTypeMovie as String, kUTTypeVideo as String]
+        case "audio":
+            documentTypes = [kUTTypeAudio as String]
+        case "document":
+            documentTypes = getLegacyDocumentTypes()
+        case "custom":
+            if let extensions = allowedExtensions {
+                // For legacy, we'll use common document types
+                documentTypes = [kUTTypeData as String]
+            } else {
+                documentTypes = [kUTTypeData as String]
+            }
+        default:
+            documentTypes = [kUTTypeData as String]
+        }
+        
+        let documentPicker = UIDocumentPickerViewController(documentTypes: documentTypes, in: .import)
+        documentPicker.delegate = self
+        documentPicker.allowsMultipleSelection = allowMultiple
+        documentPicker.modalPresentationStyle = .formSheet
+        
+        viewController.present(documentPicker, animated: true)
+    }
+    
+    @available(iOS 14.0, *)
+    private func getDocumentUTTypes() -> [UTType] {
+        var contentTypes: [UTType] = []
+        
+        // PDF
+        contentTypes.append(.pdf)
+        
+        // Microsoft Office - Word (using safe creation methods)
+        if let docType = UTType("com.microsoft.word.doc") {
+            contentTypes.append(docType)
+        }
+        if let docxType = UTType("org.openxmlformats.wordprocessingml.document") {
+            contentTypes.append(docxType)
+        }
+        
+        // Microsoft Office - Excel
+        if let xlsType = UTType("com.microsoft.excel.xls") {
+            contentTypes.append(xlsType)
+        }
+        if let xlsxType = UTType("org.openxmlformats.spreadsheetml.sheet") {
+            contentTypes.append(xlsxType)
+        }
+        
+        // Microsoft Office - PowerPoint
+        if let pptType = UTType("com.microsoft.powerpoint.ppt") {
+            contentTypes.append(pptType)
+        }
+        if let pptxType = UTType("org.openxmlformats.presentationml.presentation") {
+            contentTypes.append(pptxType)
+        }
+        
+        // Text files
+        contentTypes.append(.text)
+        contentTypes.append(.plainText)
+        if let rtfType = UTType("public.rtf") {
+            contentTypes.append(rtfType)
+        }
+        
+        // OpenDocument formats
+        if let odtType = UTType("org.oasis-open.opendocument.text") {
+            contentTypes.append(odtType)
+        }
+        if let odsType = UTType("org.oasis-open.opendocument.spreadsheet") {
+            contentTypes.append(odsType)
+        }
+        if let odpType = UTType("org.oasis-open.opendocument.presentation") {
+            contentTypes.append(odpType)
+        }
+        
+        // Archive formats
+        contentTypes.append(.zip)
+        contentTypes.append(.gzip)
+        if let rarType = UTType("com.rarlab.rar-archive") {
+            contentTypes.append(rarType)
+        }
+        if let sevenZipType = UTType("org.7-zip.7-zip-archive") {
+            contentTypes.append(sevenZipType)
+        }
+        
+        // Code files
+        contentTypes.append(.html)
+        if let cssType = UTType("public.css") {
+            contentTypes.append(cssType)
+        }
+        contentTypes.append(.javascript)
+        contentTypes.append(.json)
+        contentTypes.append(.xml)
+        if let yamlType = UTType("public.yaml") {
+            contentTypes.append(yamlType)
+        }
+        
+        // Programming language files
+        if let phpType = UTType("public.php-script") {
+            contentTypes.append(phpType)
+        }
+        if let pythonType = UTType("public.python-script") {
+            contentTypes.append(pythonType)
+        }
+        if let cType = UTType("public.c-source") {
+            contentTypes.append(cType)
+        }
+        if let cppType = UTType("public.c-plus-plus-source") {
+            contentTypes.append(cppType)
+        }
+        if let javaType = UTType("com.sun.java-source") {
+            contentTypes.append(javaType)
+        }
+        if let shellType = UTType("public.shell-script") {
+            contentTypes.append(shellType)
+        }
+        
+        // Image formats
+        contentTypes.append(.image)
+        contentTypes.append(.jpeg)
+        contentTypes.append(.png)
+        contentTypes.append(.gif)
+        contentTypes.append(.bmp)
+        contentTypes.append(.tiff)
+        if let svgType = UTType("public.svg-image") {
+            contentTypes.append(svgType)
+        }
+        if let webpType = UTType("org.webmproject.webp") {
+            contentTypes.append(webpType)
+        }
+        if let icoType = UTType("com.microsoft.ico") {
+            contentTypes.append(icoType)
+        }
+        contentTypes.append(.heic)
+        contentTypes.append(.heif)
+        
+        // Audio formats
+        contentTypes.append(.audio)
+        contentTypes.append(.mp3)
+        contentTypes.append(.wav)
+        contentTypes.append(.aiff)
+        contentTypes.append(.m4a)
+        if let flacType = UTType("org.xiph.flac") {
+            contentTypes.append(flacType)
+        }
+        if let oggType = UTType("org.xiph.ogg") {
+            contentTypes.append(oggType)
+        }
+        
+        // Video formats
+        contentTypes.append(.movie)
+        contentTypes.append(.video)
+        contentTypes.append(.mpeg4Movie)
+        contentTypes.append(.quickTimeMovie)
+        contentTypes.append(.avi)
+        
+        // Font formats
+        if let ttfType = UTType("public.truetype-ttf-font") {
+            contentTypes.append(ttfType)
+        }
+        if let otfType = UTType("public.opentype-font") {
+            contentTypes.append(otfType)
+        }
+        
+        // Other formats
+        contentTypes.append(.data)
+        if let epubType = UTType("org.idpf.epub-container") {
+            contentTypes.append(epubType)
+        }
+        
+        return contentTypes
+    }
+    
+    private func getLegacyDocumentTypes() -> [String] {
+        return [
+            // PDF
+            kUTTypePDF as String,
+            
+            // Microsoft Office
+            "com.microsoft.word.doc",
+            "org.openxmlformats.wordprocessingml.document",
+            "com.microsoft.excel.xls", 
+            "org.openxmlformats.spreadsheetml.sheet",
+            "com.microsoft.powerpoint.ppt",
+            "org.openxmlformats.presentationml.presentation",
+            
+            // Text files
+            kUTTypeText as String,
+            kUTTypePlainText as String,
+            kUTTypeRTF as String,
+            
+            // Archive formats
+            kUTTypeZipArchive as String,
+            kUTTypeGZIP as String,
+            
+            // Code files
+            kUTTypeHTML as String,
+            "public.css",
+            "com.netscape.javascript-source",
+            kUTTypeJSON as String,
+            kUTTypeXML as String,
+            
+            // Images
+            kUTTypeImage as String,
+            kUTTypeJPEG as String,
+            kUTTypePNG as String,
+            kUTTypeGIF as String,
+            kUTTypeBMP as String,
+            kUTTypeTIFF as String,
+            
+            // Audio
+            kUTTypeAudio as String,
+            kUTTypeMP3 as String,
+            
+            // Video
+            kUTTypeMovie as String,
+            kUTTypeVideo as String,
+            kUTTypeMPEG4 as String,
+            kUTTypeQuickTimeMovie as String,
+            
+            // Generic data
+            kUTTypeData as String
+        ]
+    }
 
     private func presentImagePicker(sourceType: UIImagePickerController.SourceType, from viewController: UIViewController) {
         guard UIImagePickerController.isSourceTypeAvailable(sourceType) else {
@@ -212,7 +431,13 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
 
         let imagePicker = UIImagePickerController()
         imagePicker.sourceType = sourceType
-        imagePicker.mediaTypes = [kUTTypeImage as String]
+        let mediaTypeImage: String
+        if #available(iOS 14.0, *) {
+            mediaTypeImage = UTType.image.identifier
+        } else {
+            mediaTypeImage = kUTTypeImage as String
+        }
+        imagePicker.mediaTypes = [mediaTypeImage]
         imagePicker.delegate = self
         imagePicker.allowsEditing = false
 
@@ -227,7 +452,13 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
 
         let videoPicker = UIImagePickerController()
         videoPicker.sourceType = sourceType
-        videoPicker.mediaTypes = [kUTTypeMovie as String]
+        let mediaTypeMovie: String
+        if #available(iOS 14.0, *) {
+            mediaTypeMovie = UTType.movie.identifier
+        } else {
+            mediaTypeMovie = kUTTypeMovie as String
+        }
+        videoPicker.mediaTypes = [mediaTypeMovie]
         videoPicker.delegate = self
         videoPicker.allowsEditing = false
         videoPicker.videoQuality = .typeMedium
@@ -307,6 +538,8 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
     }
 
     private func capturePhoto(arguments: [String: Any]) {
+        // Mark that we are in capture photo mode to shape the result accordingly
+        isCapturePhotoMode = true
         allowCompression = arguments["allowCompression"] as? Bool ?? false
         withData = arguments["withData"] as? Bool ?? false
         
@@ -314,7 +547,7 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
             compressionQuality = CGFloat(quality) / 100.0
         }
         
-        guard let viewController = UIApplication.shared.keyWindow?.rootViewController else {
+        guard let viewController = topMostViewController(base: getRootViewController()) else {
             result?(FlutterError(code: "NO_VIEW_CONTROLLER", message: "Cannot find view controller", details: nil))
             return
         }
@@ -326,11 +559,32 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
         
         let imagePicker = UIImagePickerController()
         imagePicker.sourceType = .camera
-        imagePicker.mediaTypes = [kUTTypeImage as String]
+        let mediaTypeImage: String
+        if #available(iOS 14.0, *) {
+            mediaTypeImage = UTType.image.identifier
+        } else {
+            mediaTypeImage = kUTTypeImage as String
+        }
+        imagePicker.mediaTypes = [mediaTypeImage]
         imagePicker.delegate = self
         imagePicker.allowsEditing = false
         
         viewController.present(imagePicker, animated: true)
+    }
+    
+    private func saveDataToTemporaryFile(data: Data, fileName: String) -> URL {
+        let tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("file_picker")
+
+        if !FileManager.default.fileExists(atPath: tempDirectory.path) {
+            try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        }
+
+        let tempURL = tempDirectory.appendingPathComponent("\(UUID().uuidString)_\(fileName)")
+        temporaryFiles.append(tempURL)
+
+        try? data.write(to: tempURL)
+
+        return tempURL
     }
 }
 
@@ -372,6 +626,8 @@ extension ImagePickerMasterPlugin: UIImagePickerControllerDelegate, UINavigation
 
     public func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
+        // Reset capture mode on cancel
+        isCapturePhotoMode = false
         result?(nil)
     }
 
@@ -398,7 +654,14 @@ extension ImagePickerMasterPlugin: UIImagePickerControllerDelegate, UINavigation
             fileData["bytes"] = FlutterStandardTypedData(bytes: imageData)
         }
 
-        result?([fileData])
+        // If this image came from capturePhoto, return a single Map; otherwise, return a List for pickFiles
+        if isCapturePhotoMode {
+            result?(fileData)
+        } else {
+            result?([fileData])
+        }
+        // Reset the mode after handling
+        isCapturePhotoMode = false
     }
 
     private func handleVideoSelection(info: [UIImagePickerController.InfoKey : Any]) {
@@ -412,20 +675,5 @@ extension ImagePickerMasterPlugin: UIImagePickerControllerDelegate, UINavigation
         } else {
             result?(FlutterError(code: "VIDEO_PROCESSING_ERROR", message: "Error processing video", details: nil))
         }
-    }
-
-    private func saveDataToTemporaryFile(data: Data, fileName: String) -> URL {
-        let tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("file_picker")
-
-        if !FileManager.default.fileExists(atPath: tempDirectory.path) {
-            try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
-        }
-
-        let tempURL = tempDirectory.appendingPathComponent("\(UUID().uuidString)_\(fileName)")
-        temporaryFiles.append(tempURL)
-
-        try? data.write(to: tempURL)
-
-        return tempURL
     }
 }

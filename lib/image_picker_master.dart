@@ -1,7 +1,13 @@
+import 'package:flutter/foundation.dart';
+
 import 'image_picker_master_platform_interface.dart';
 import 'src/tools/file_picker_options.dart';
 import 'src/tools/file_type.dart';
 import 'src/tools/picked_file.dart';
+
+// Conditional imports for web platform
+import 'image_picker_master_web_stub.dart'
+    if (dart.library.html) 'image_picker_master_web.dart';
 
 export 'src/tools/file_picker_options.dart';
 export 'src/tools/file_type.dart';
@@ -23,7 +29,12 @@ class ImagePickerMaster {
   /// Gets the singleton instance of [ImagePickerMaster].
   static ImagePickerMaster get instance => _instance ??= ImagePickerMaster._();
 
-  ImagePickerMaster._();
+  ImagePickerMaster._() {
+    // Initialize web platform if running on web
+    if (kIsWeb) {
+      ImagePickerMasterPlatform.instance = ImagePickerMasterWeb();
+    }
+  }
 
   /// Returns the platform version string.
   ///

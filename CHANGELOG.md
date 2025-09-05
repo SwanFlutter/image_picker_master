@@ -12,3 +12,10 @@
 ## 0.0.3
 
 * Add new methed for picker camera.
+
+
+## 0.0.4
+
+* Fix pug for web.
+* Edite README.md.
+* Fix pug Android for camra.

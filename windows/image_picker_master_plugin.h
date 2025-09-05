@@ -62,6 +62,9 @@ namespace image_picker_master {
         
         // Media Foundation initialization flag
         bool mf_initialized_;
+        
+        // Camera error tracking
+        std::string last_camera_error_;
 
         // Temporary files for cleanup
         std::vector<std::string> temporary_files_;

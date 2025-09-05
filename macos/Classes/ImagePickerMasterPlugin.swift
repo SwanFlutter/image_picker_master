@@ -95,65 +95,13 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin, AVCapturePhotoCap
     private func getContentTypes() -> [UTType] {
         switch fileType {
         case "image":
-            return [.image, .jpeg, .png, .gif, .bmp, .tiff, .heic, .webP]
+            return getImageUTTypes()
         case "video":
-            return [.movie, .video, .mpeg4Movie, .quickTimeMovie, .avi, .mp4]
+            return getVideoUTTypes()
         case "audio":
-            return [.audio, .mp3, .wav, .aiff, .m4a, .flac]
+            return getAudioUTTypes()
         case "document":
-            return [
-                // PDF
-                .pdf,
-                
-                // Microsoft Office - Word
-                .doc, .docx,
-                
-                // Microsoft Office - Excel
-                .xls, .xlsx,
-                
-                // Microsoft Office - PowerPoint
-                .ppt, .pptx,
-                
-                // Text files
-                .text, .plainText, .rtf,
-                
-                // OpenDocument formats
-                UTType("org.oasis-open.opendocument.text")!,
-                UTType("org.oasis-open.opendocument.spreadsheet")!,
-                UTType("org.oasis-open.opendocument.presentation")!,
-                
-                // Archive formats
-                .zip, .gzip,
-                UTType("com.rarlab.rar-archive")!,
-                UTType("org.7-zip.7-zip-archive")!,
-                
-                // Code files
-                .html, .css, .javascript, .json, .xml, .yaml,
-                UTType("public.php-script")!,
-                UTType("public.python-script")!,
-                UTType("public.c-source")!,
-                UTType("public.c-plus-plus-source")!,
-                UTType("com.sun.java-source")!,
-                UTType("public.shell-script")!,
-                UTType("public.perl-script")!,
-                UTType("public.ruby-script")!,
-                
-                // Image formats
-                .image, .jpeg, .png, .gif, .bmp, .tiff, .svg, .webP, .ico, .heic, .heif,
-                
-                // Audio formats
-                .audio, .mp3, .wav, .aiff, .m4a, .flac, .ogg,
-                
-                // Video formats
-                .movie, .video, .mpeg4Movie, .quickTimeMovie, .avi,
-                
-                // Font formats
-                UTType("public.truetype-ttf-font")!,
-                UTType("public.opentype-font")!,
-                
-                // Other formats
-                .data, .epub
-            ]
+            return getDocumentUTTypes()
         case "custom":
             if let extensions = allowedExtensions {
                 return extensions.compactMap { UTType(filenameExtension: $0) }
@@ -162,6 +110,195 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin, AVCapturePhotoCap
         default:
             return [.data]
         }
+    }
+    
+    @available(macOS 11.0, *)
+    private func getImageUTTypes() -> [UTType] {
+        var types: [UTType] = [.image, .jpeg, .png, .gif, .bmp, .tiff, .heic]
+        
+        // Add WebP if available
+        if let webpType = UTType("org.webmproject.webp") {
+            types.append(webpType)
+        }
+        
+        return types
+    }
+    
+    @available(macOS 11.0, *)
+    private func getVideoUTTypes() -> [UTType] {
+        var types: [UTType] = [.movie, .video, .mpeg4Movie, .quickTimeMovie, .avi]
+        
+        // Add MP4 if available
+        if let mp4Type = UTType("public.mpeg-4") {
+            types.append(mp4Type)
+        }
+        
+        return types
+    }
+    
+    @available(macOS 11.0, *)
+    private func getAudioUTTypes() -> [UTType] {
+        var types: [UTType] = [.audio, .mp3, .wav, .aiff, .m4a]
+        
+        // Add FLAC if available
+        if let flacType = UTType("org.xiph.flac") {
+            types.append(flacType)
+        }
+        
+        return types
+    }
+    
+    @available(macOS 11.0, *)
+    private func getDocumentUTTypes() -> [UTType] {
+        var contentTypes: [UTType] = []
+        
+        // PDF
+        contentTypes.append(.pdf)
+        
+        // Microsoft Office - Word (using safe creation methods)
+        if let docType = UTType("com.microsoft.word.doc") {
+            contentTypes.append(docType)
+        }
+        if let docxType = UTType("org.openxmlformats.wordprocessingml.document") {
+            contentTypes.append(docxType)
+        }
+        
+        // Microsoft Office - Excel
+        if let xlsType = UTType("com.microsoft.excel.xls") {
+            contentTypes.append(xlsType)
+        }
+        if let xlsxType = UTType("org.openxmlformats.spreadsheetml.sheet") {
+            contentTypes.append(xlsxType)
+        }
+        
+        // Microsoft Office - PowerPoint
+        if let pptType = UTType("com.microsoft.powerpoint.ppt") {
+            contentTypes.append(pptType)
+        }
+        if let pptxType = UTType("org.openxmlformats.presentationml.presentation") {
+            contentTypes.append(pptxType)
+        }
+        
+        // Text files
+        contentTypes.append(.text)
+        contentTypes.append(.plainText)
+        if let rtfType = UTType("public.rtf") {
+            contentTypes.append(rtfType)
+        }
+        
+        // OpenDocument formats
+        if let odtType = UTType("org.oasis-open.opendocument.text") {
+            contentTypes.append(odtType)
+        }
+        if let odsType = UTType("org.oasis-open.opendocument.spreadsheet") {
+            contentTypes.append(odsType)
+        }
+        if let odpType = UTType("org.oasis-open.opendocument.presentation") {
+            contentTypes.append(odpType)
+        }
+        
+        // Archive formats
+        contentTypes.append(.zip)
+        contentTypes.append(.gzip)
+        if let rarType = UTType("com.rarlab.rar-archive") {
+            contentTypes.append(rarType)
+        }
+        if let sevenZipType = UTType("org.7-zip.7-zip-archive") {
+            contentTypes.append(sevenZipType)
+        }
+        
+        // Code files
+        contentTypes.append(.html)
+        if let cssType = UTType("public.css") {
+            contentTypes.append(cssType)
+        }
+        contentTypes.append(.javascript)
+        contentTypes.append(.json)
+        contentTypes.append(.xml)
+        if let yamlType = UTType("public.yaml") {
+            contentTypes.append(yamlType)
+        }
+        
+        // Programming language files
+        if let phpType = UTType("public.php-script") {
+            contentTypes.append(phpType)
+        }
+        if let pythonType = UTType("public.python-script") {
+            contentTypes.append(pythonType)
+        }
+        if let cType = UTType("public.c-source") {
+            contentTypes.append(cType)
+        }
+        if let cppType = UTType("public.c-plus-plus-source") {
+            contentTypes.append(cppType)
+        }
+        if let javaType = UTType("com.sun.java-source") {
+            contentTypes.append(javaType)
+        }
+        if let shellType = UTType("public.shell-script") {
+            contentTypes.append(shellType)
+        }
+        if let perlType = UTType("public.perl-script") {
+            contentTypes.append(perlType)
+        }
+        if let rubyType = UTType("public.ruby-script") {
+            contentTypes.append(rubyType)
+        }
+        
+        // Image formats
+        contentTypes.append(.image)
+        contentTypes.append(.jpeg)
+        contentTypes.append(.png)
+        contentTypes.append(.gif)
+        contentTypes.append(.bmp)
+        contentTypes.append(.tiff)
+        if let svgType = UTType("public.svg-image") {
+            contentTypes.append(svgType)
+        }
+        if let webpType = UTType("org.webmproject.webp") {
+            contentTypes.append(webpType)
+        }
+        if let icoType = UTType("com.microsoft.ico") {
+            contentTypes.append(icoType)
+        }
+        contentTypes.append(.heic)
+        contentTypes.append(.heif)
+        
+        // Audio formats
+        contentTypes.append(.audio)
+        contentTypes.append(.mp3)
+        contentTypes.append(.wav)
+        contentTypes.append(.aiff)
+        contentTypes.append(.m4a)
+        if let flacType = UTType("org.xiph.flac") {
+            contentTypes.append(flacType)
+        }
+        if let oggType = UTType("org.xiph.ogg") {
+            contentTypes.append(oggType)
+        }
+        
+        // Video formats
+        contentTypes.append(.movie)
+        contentTypes.append(.video)
+        contentTypes.append(.mpeg4Movie)
+        contentTypes.append(.quickTimeMovie)
+        contentTypes.append(.avi)
+        
+        // Font formats
+        if let ttfType = UTType("public.truetype-ttf-font") {
+            contentTypes.append(ttfType)
+        }
+        if let otfType = UTType("public.opentype-font") {
+            contentTypes.append(otfType)
+        }
+        
+        // Other formats
+        contentTypes.append(.data)
+        if let epubType = UTType("org.idpf.epub-container") {
+            contentTypes.append(epubType)
+        }
+        
+        return contentTypes
     }
 
     private func getFileTypes() -> [String] {
@@ -173,7 +310,7 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin, AVCapturePhotoCap
         case "audio":
             return ["mp3", "wav", "aiff", "m4a", "flac", "ogg"]
         case "document":
-            return ["pdf", "txt", "rtf", "doc", "docx", "xls", "xlsx", "ppt", "pptx"]
+            return ["pdf", "txt", "rtf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "html", "css", "js", "json", "xml", "csv"]
         case "custom":
             return allowedExtensions ?? []
         default:
@@ -371,71 +508,71 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin, AVCapturePhotoCap
     }
     
     @objc private func capturePhotoAction() {
-         guard let photoOutput = objc_getAssociatedObject(self, "photoOutput") as? AVCapturePhotoOutput else { return }
-         
-         let settings = AVCapturePhotoSettings()
-         photoOutput.capturePhoto(with: settings, delegate: self)
-     }
-     
-     // MARK: - AVCapturePhotoCaptureDelegate
-     public func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-         // Close the capture window
-         if let window = objc_getAssociatedObject(self, "captureWindow") as? NSWindow {
-             window.close()
-         }
-         
-         // Stop the capture session
-         if let session = objc_getAssociatedObject(self, "captureSession") as? AVCaptureSession {
-             session.stopRunning()
-         }
-         
-         if let error = error {
-             result?(FlutterError(code: "CAPTURE_ERROR", message: "Failed to capture photo: \(error.localizedDescription)", details: nil))
-             return
-         }
-         
-         guard let imageData = photo.fileDataRepresentation() else {
-             result?(FlutterError(code: "NO_IMAGE_DATA", message: "Failed to get image data", details: nil))
-             return
-         }
-         
-         let fileName = "photo_\(Date().timeIntervalSince1970).jpg"
-         var finalImageData = imageData
-         
-         // Apply compression if needed
-         if allowCompression {
-             finalImageData = compressImageData(imageData) ?? imageData
-         }
-         
-         // Save to temporary file
-         let tempURL = saveDataToTemporaryFile(data: finalImageData, fileName: fileName)
-         
-         var fileData: [String: Any] = [
-             "path": tempURL.path,
-             "name": fileName,
-             "size": finalImageData.count,
-             "mimeType": "image/jpeg"
-         ]
-         
-         if withData {
-             fileData["bytes"] = FlutterStandardTypedData(bytes: finalImageData)
-         }
-         
-         result?([fileData])
-     }
-     
-     private func saveDataToTemporaryFile(data: Data, fileName: String) -> URL {
-         let tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("file_picker")
-         
-         if !FileManager.default.fileExists(atPath: tempDirectory.path) {
-             try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
-         }
-         
-         let tempURL = tempDirectory.appendingPathComponent("\(UUID().uuidString)_\(fileName)")
-         temporaryFiles.append(tempURL)
-         
-         try? data.write(to: tempURL)
-         
-         return tempURL
-     }
- }
+        guard let photoOutput = objc_getAssociatedObject(self, "photoOutput") as? AVCapturePhotoOutput else { return }
+        
+        let settings = AVCapturePhotoSettings()
+        photoOutput.capturePhoto(with: settings, delegate: self)
+    }
+    
+    // MARK: - AVCapturePhotoCaptureDelegate
+    public func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        // Close the capture window
+        if let window = objc_getAssociatedObject(self, "captureWindow") as? NSWindow {
+            window.close()
+        }
+        
+        // Stop the capture session
+        if let session = objc_getAssociatedObject(self, "captureSession") as? AVCaptureSession {
+            session.stopRunning()
+        }
+        
+        if let error = error {
+            result?(FlutterError(code: "CAPTURE_ERROR", message: "Failed to capture photo: \(error.localizedDescription)", details: nil))
+            return
+        }
+        
+        guard let imageData = photo.fileDataRepresentation() else {
+            result?(FlutterError(code: "NO_IMAGE_DATA", message: "Failed to get image data", details: nil))
+            return
+        }
+        
+        let fileName = "photo_\(Date().timeIntervalSince1970).jpg"
+        var finalImageData = imageData
+        
+        // Apply compression if needed
+        if allowCompression {
+            finalImageData = compressImageData(imageData) ?? imageData
+        }
+        
+        // Save to temporary file
+        let tempURL = saveDataToTemporaryFile(data: finalImageData, fileName: fileName)
+        
+        var fileData: [String: Any] = [
+            "path": tempURL.path,
+            "name": fileName,
+            "size": finalImageData.count,
+            "mimeType": "image/jpeg"
+        ]
+        
+        if withData {
+            fileData["bytes"] = FlutterStandardTypedData(bytes: finalImageData)
+        }
+        
+        result?(fileData) // Return single file data for capturePhoto
+    }
+    
+    private func saveDataToTemporaryFile(data: Data, fileName: String) -> URL {
+        let tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("file_picker")
+        
+        if !FileManager.default.fileExists(atPath: tempDirectory.path) {
+            try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        }
+        
+        let tempURL = tempDirectory.appendingPathComponent("\(UUID().uuidString)_\(fileName)")
+        temporaryFiles.append(tempURL)
+        
+        try? data.write(to: tempURL)
+        
+        return tempURL
+    }
+}
