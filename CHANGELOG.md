@@ -18,4 +18,4 @@
 
 * Fix pug for web.
 * Edite README.md.
-* Fix pug Android for camra.
+* Fix pug Android for camera.
