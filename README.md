@@ -1,82 +1,55 @@
+[![pub package](https://img.shields.io/pub/v/image_picker_master.svg)](https://pub.dev/packages/image_picker_master)
+[![Pub Points](https://img.shields.io/pub/points/image_picker_master)](https://pub.dev/packages/image_picker_master/score)
+[![Popularity](https://img.shields.io/pub/popularity/image_picker_master)](https://pub.dev/packages/image_picker_master)
+[![Pub Likes](https://img.shields.io/pub/likes/image_picker_master)](https://pub.dev/packages/image_picker_master)
+[![GitHub issues](https://img.shields.io/github/issues/SwanFlutter/image_picker_master)](https://github.com/SwanFlutter/image_picker_master/issues)
+[![GitHub forks](https://img.shields.io/github/forks/SwanFlutter/image_picker_master)](https://github.com/SwanFlutter/image_picker_master/network/members)
+[![GitHub stars](https://img.shields.io/github/stars/SwanFlutter/image_picker_master?style=social)](https://github.com/SwanFlutter/image_picker_master/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Flutter Platform](https://img.shields.io/badge/platform-android%20%7C%20ios%20%7C%20macos%20%7C%20linux%20%7C%20windows%20%7C%20web-lightgrey)](https://pub.dev/packages/image_picker_master)
 
 # Image Picker Master
-A comprehensive Flutter plugin for selecting files from device storage with full Unicode support, including Persian/Farsi filenames.
+
+A comprehensive Flutter plugin for picking images, videos, audio files, documents, and any file type — with multiple selection, compression, Unicode filename support, and camera capture — across all platforms.
+
+---
+
+## Platform Support
+
+| Platform | Pick Files | Camera Capture | Multiple Select | Compression |
+|----------|:----------:|:--------------:|:---------------:|:-----------:|
+| Android  | ✅ | ✅ | ✅ | ✅ |
+| iOS      | ✅ | ✅ | ✅ | ✅ |
+| macOS    | ✅ | ✅ | ✅ | ✅ |
+| Windows  | ✅ | ✅ | ✅ | ✅ |
+| Linux    | ✅ | ✅ | ✅ | ✅ |
+| Web      | ✅ | ✅ | ✅ | ✅ |
 
 ---
 
 ## Features
-- ✅ **Cross-platform support**: Windows, Android, iOS, macOS, Linux, Web
-- ✅ **Multiple file types**: Images, videos, audio, documents, and custom files
-- ✅ **Unicode support**: Full support for Persian/Farsi and other Unicode filenames
-- ✅ **Flexible selection**: Single or multiple file selection
-- ✅ **File compression**: Optional image compression with quality control
-- ✅ **MIME type detection**: Automatic file type detection
-- ✅ **Memory optimization**: Efficient file handling without unnecessary copies
 
----
-
-## Supported File Types
-
-### Images
-- JPEG (.jpg, .jpeg) – Standard photo format
-- PNG (.png) – Transparent background images
-- GIF (.gif) – Animated images
-- BMP (.bmp) – Bitmap images
-- TIFF (.tiff) – Professional format
-- WebP (.webp) – Modern web format
-- HEIC/HEIF – Apple’s new format
-- AVIF (.avif) – Next-gen format
-- SVG (.svg) – Vector images
-- ICO (.ico) – Icons
-
-### Videos
-- MP4 (.mp4) – Standard format
-- AVI (.avi) – Classic format
-- MOV (.mov) – QuickTime format
-- MKV (.mkv) – Multimedia container
-- WMV (.wmv) – Windows Media format
-- FLV (.flv) – Flash Video format
-- WebM (.webm) – Web format
-- 3GP (.3gp) – Mobile format
-- M4V (.m4v) – iTunes format
-
-### Audio
-- MP3 (.mp3) – Popular music format
-- WAV (.wav) – Lossless format
-- M4A (.m4a) – Apple AAC format
-- FLAC (.flac) – Lossless format
-- OGG (.ogg) – Open-source format
-- AAC (.aac) – Advanced format
-- WMA (.wma) – Windows Media format
-- AIFF (.aiff) – Audio Interchange format
-
-### Documents
-- PDF (.pdf) – Portable documents
-- Word (.doc, .docx) – Microsoft Word documents
-- Excel (.xls, .xlsx) – Microsoft Excel spreadsheets
-- PowerPoint (.ppt, .pptx) – Microsoft PowerPoint presentations
-- Text (.txt) – Plain text
-- RTF (.rtf) – Formatted text
-- Markdown (.md, .markdown) – Markup text
-- OpenDocument (.odt, .ods, .odp) – Open formats
-- iWork (Pages, Numbers, Keynote) – Apple formats
-- EPUB (.epub) – E-books
-- HTML (.html, .htm) – Web pages
-- CSS (.css) – Stylesheets
-- JavaScript (.js) – JavaScript code
-- JSON (.json) – Structured data
-- XML (.xml) – Markup data
-- CSV (.csv) – Tabular data
-- Archive files (.zip, .rar, .7z, .tar, .gz)
+- ✅ **Cross-platform** — Android, iOS, macOS, Windows, Linux, Web
+- ✅ **All file types** — Images, videos, audio, documents, archives, fonts, code files
+- ✅ **Camera capture** — Take photos directly from the camera on all platforms
+- ✅ **Multiple selection** — Pick several files at once
+- ✅ **Image compression** — Quality control from 0 to 100
+- ✅ **File bytes** — Optionally load raw bytes into memory (`withData: true`)
+- ✅ **MIME type detection** — Automatic detection for all file types
+- ✅ **Unicode filenames** — Full support for Persian/Farsi, Arabic, Chinese, and all Unicode scripts
+- ✅ **Temporary file cleanup** — Built-in `clearTemporaryFiles()` to free disk space
+- ✅ **Custom extensions** — Filter picker to any file extension you choose
+- ✅ **Runtime permissions** — Camera and storage permissions requested automatically (Android/iOS)
 
 ---
 
 ## Installation
-Add this line to your `pubspec.yaml` file:
+
+Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  image_picker_master: ^0.0.4
+  image_picker_master: ^0.0.5
 ```
 
 Then run:
@@ -87,649 +60,398 @@ flutter pub get
 
 ---
 
-## Usage Guide
+## Setup
 
-### Import the Package
+### Android
+
+No manual setup required. The plugin automatically requests `CAMERA` and storage permissions at runtime.
+
+The following are declared in the plugin's `AndroidManifest.xml` — you do **not** need to add them to your app:
+
+```xml
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+<uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+```
+
+### iOS
+
+Add these keys to your `ios/Runner/Info.plist`:
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>This app uses the camera to capture photos and videos.</string>
+
+<key>NSPhotoLibraryUsageDescription</key>
+<string>This app accesses your photo library to pick images and videos.</string>
+
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>This app saves captured photos to your photo library.</string>
+
+<key>NSMicrophoneUsageDescription</key>
+<string>This app uses the microphone to record video audio.</string>
+```
+
+> **Note:** If you use the plugin's podspec `script_phase` (included by default), these keys are injected automatically at build time when missing.
+
+### macOS
+
+Add to your `macos/Runner/Info.plist`:
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>This app uses the camera to capture photos.</string>
+
+<key>NSMicrophoneUsageDescription</key>
+<string>This app uses the microphone.</string>
+```
+
+And to your `macos/Runner/DebugProfile.entitlements` and `macos/Runner/Release.entitlements`:
+
+```xml
+<key>com.apple.security.device.camera</key>
+<true/>
+<key>com.apple.security.device.microphone</key>
+<true/>
+```
+
+> **Note:** The plugin's podspec `script_phase` injects these automatically when missing.
+
+---
+
+## Quick Start
+
 ```dart
 import 'package:image_picker_master/image_picker_master.dart';
+
+// Pick a single image
+final image = await ImagePickerMaster.instance.pickImage();
+
+// Pick multiple images
+final images = await ImagePickerMaster.instance.pickImages();
+
+// Capture a photo
+final photo = await ImagePickerMaster.instance.capturePhoto();
+
+// Pick a PDF/Word document
+final doc = await ImagePickerMaster.instance.pickDocument();
+
+// Pick any file type
+final files = await ImagePickerMaster.instance.pickFiles(
+  type: FileType.all,
+  allowMultiple: true,
+);
 ```
 
 ---
 
-### Example Usage for Each Method
+## Usage Guide
 
-#### 1. `getPlatformVersion()` Method
+### 1. `pickFiles()` — Pick any file type
+
 ```dart
-// Example 1: Get platform version
-void checkPlatformVersion() async {
-  try {
-    final version = await ImagePickerMaster.instance.getPlatformVersion();
-    print('Platform version: $version');
-  } catch (e) {
-    print('Error getting platform version: $e');
-  }
-}
+// Pick all file types
+final files = await ImagePickerMaster.instance.pickFiles(
+  type: FileType.all,
+  allowMultiple: true,
+);
 
-// Example 2: Display full diagnostic info
-void showDiagnosticInfo() async {
-  try {
-    final version = await ImagePickerMaster.instance.getPlatformVersion();
-    print('═══ Diagnostic Info ═══');
-    print('Platform version: ${version ?? 'Unknown'}');
-    print('Current platform: ${Platform.operatingSystem}');
-    print('Web: ${kIsWeb ? 'Yes' : 'No'}');
-    print('═══════════════════');
-  } catch (e) {
-    print('Error: $e');
+// Pick images with compression
+final images = await ImagePickerMaster.instance.pickFiles(
+  type: FileType.image,
+  allowMultiple: true,
+  allowCompression: true,
+  compressionQuality: 75,
+  withData: true,
+);
+
+// Pick only specific extensions
+final custom = await ImagePickerMaster.instance.pickFiles(
+  type: FileType.custom,
+  allowedExtensions: ['pdf', 'docx', 'xlsx'],
+  allowMultiple: true,
+);
+
+if (files != null) {
+  for (final file in files) {
+    print('${file.name} — ${file.size} bytes — ${file.mimeType}');
   }
 }
 ```
 
-#### 2. `pickFiles()` Method
+### 2. `pickImage()` / `pickImages()` — Images
+
 ```dart
-// Example 1: Pick various files
-void pickVariousFiles() async {
-  try {
-    final files = await ImagePickerMaster.instance.pickFiles(
-      type: FileType.all,
-      allowMultiple: true,
-    );
+// Single image
+final image = await ImagePickerMaster.instance.pickImage(
+  allowCompression: true,
+  compressionQuality: 80,
+  withData: true,
+);
 
-    if (files != null && files.isNotEmpty) {
-      print('${files.length} files selected:');
-      for (var file in files) {
-        print('- ${file.name} (${file.size} bytes)');
-      }
-    } else {
-      print('No files selected');
-    }
-  } catch (e) {
-    print('Error picking files: $e');
+if (image != null) {
+  print('Path: ${image.path}');
+  print('Size: ${(image.size / 1024).toStringAsFixed(1)} KB');
+  if (image.bytes != null) {
+    // Use raw bytes directly — e.g. Image.memory(image.bytes!)
   }
 }
 
-// Example 2: Pick custom files with compression
-void pickCustomFilesWithCompression() async {
-  try {
-    final files = await ImagePickerMaster.instance.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['jpg', 'png', 'pdf', 'docx'],
-      allowMultiple: true,
-      allowCompression: true,
-      compressionQuality: 75,
-      withData: true,
-    );
+// Multiple images
+final images = await ImagePickerMaster.instance.pickImages(
+  allowMultiple: true,
+  allowCompression: true,
+  compressionQuality: 85,
+);
+```
 
-    if (files != null) {
-      for (var file in files) {
-        print('File: ${file.name}');
-        print('Size: ${file.size} bytes');
-        print('MIME Type: ${file.mimeType}');
-        print('Data available: ${file.bytes != null}');
-        print('---');
-      }
-    }
-  } catch (e) {
-    print('Error: $e');
-  }
+### 3. `pickVideo()` / `pickVideos()` — Videos
+
+```dart
+final video = await ImagePickerMaster.instance.pickVideo();
+if (video != null) {
+  print('${video.name} — ${(video.size / 1024 / 1024).toStringAsFixed(2)} MB');
 }
 
-// Example 3: Pick office files
-void pickOfficeFiles() async {
-  try {
-    final files = await ImagePickerMaster.instance.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'],
-      allowMultiple: true,
-      withData: false,
-    );
+final videos = await ImagePickerMaster.instance.pickVideos(allowMultiple: true);
+```
 
-    if (files != null && files.isNotEmpty) {
-      print('Office files selected:');
+### 4. `pickAudio()` / `pickAudios()` — Audio
 
-      // Categorize by type
-      final categories = <String, List<PickedFile>>{
-        'PDF': [],
-        'Word': [],
-        'Excel': [],
-        'PowerPoint': [],
-        'Other': [],
-      };
+```dart
+final audio = await ImagePickerMaster.instance.pickAudio(withData: true);
+if (audio != null && audio.bytes != null) {
+  print('Audio bytes loaded: ${audio.bytes!.length}');
+}
 
-      for (var file in files) {
-        final ext = file.name.split('.').last.toLowerCase();
-        if (ext == 'pdf') {
-          categories['PDF']!.add(file);
-        } else if (['doc', 'docx'].contains(ext)) {
-          categories['Word']!.add(file);
-        } else if (['xls', 'xlsx'].contains(ext)) {
-          categories['Excel']!.add(file);
-        } else if (['ppt', 'pptx'].contains(ext)) {
-          categories['PowerPoint']!.add(file);
-        } else {
-          categories['Other']!.add(file);
-        }
-      }
+final audios = await ImagePickerMaster.instance.pickAudios();
+```
 
-      categories.forEach((category, fileList) {
-        if (fileList.isNotEmpty) {
-          print('\n$category (${fileList.length} files):');
-          for (var file in fileList) {
-            print('  • ${file.name}');
-          }
-        }
-      });
-    }
-  } catch (e) {
-    print('Error: $e');
+### 5. `pickDocument()` / `pickDocuments()` — Documents
+
+```dart
+// Single document
+final doc = await ImagePickerMaster.instance.pickDocument(
+  allowedExtensions: ['pdf', 'docx', 'txt'],
+  withData: true,
+);
+
+// Multiple documents
+final docs = await ImagePickerMaster.instance.pickDocuments(
+  allowMultiple: true,
+);
+
+if (docs != null) {
+  for (final doc in docs) {
+    final ext = doc.name.split('.').last.toLowerCase();
+    print('[$ext] ${doc.name} — ${(doc.size / 1024).toStringAsFixed(1)} KB');
   }
 }
 ```
 
-#### 3. `pickImage()` Method
+### 6. `capturePhoto()` — Camera
+
 ```dart
-// Example 1: Pick a single image
-void pickSingleImage() async {
-  try {
-    final image = await ImagePickerMaster.instance.pickImage();
+// Basic capture
+final photo = await ImagePickerMaster.instance.capturePhoto();
 
-    if (image != null) {
-      print('Selected image: ${image.name}');
-      print('File size: ${image.size} bytes');
-      print('MIME Type: ${image.mimeType}');
-      print('File path: ${image.path}');
-    } else {
-      print('No image selected');
-    }
-  } catch (e) {
-    print('Error picking image: $e');
-  }
-}
+// Compressed capture ready for upload
+final photo = await ImagePickerMaster.instance.capturePhoto(
+  allowCompression: true,
+  compressionQuality: 70,
+  withData: true,
+);
 
-// Example 2: High-quality image with data
-void pickHighQualityImageWithData() async {
-  try {
-    final image = await ImagePickerMaster.instance.pickImage(
-      allowCompression: true,
-      compressionQuality: 95,
-      withData: true,
-    );
-
-    if (image != null) {
-      print('High-quality image selected: ${image.name}');
-      print('Original size: ${image.size} bytes');
-
-      if (image.bytes != null) {
-        print('Image data available: ${image.bytes!.length} bytes');
-        // Now you can use image.bytes for immediate processing
-      }
-    }
-  } catch (e) {
-    print('Error: $e');
-  }
+if (photo != null) {
+  print('Captured: ${photo.name}');
+  print('Size: ${(photo.size / 1024).toStringAsFixed(1)} KB');
+  // photo.bytes contains raw JPEG data when withData: true
 }
 ```
 
-#### 4. `pickImages()` Method
+### 7. `clearTemporaryFiles()` — Cleanup
+
+Call this to free disk space used by the plugin's temp copies:
+
 ```dart
-// Example 1: Pick multiple images
-void pickMultipleImages() async {
-  try {
-    final images = await ImagePickerMaster.instance.pickImages();
-
-    if (images != null && images.isNotEmpty) {
-      print('${images.length} images selected:');
-
-      for (int i = 0; i < images.length; i++) {
-        final image = images[i];
-        print('${i + 1}. ${image.name}');
-        print('   Size: ${(image.size / 1024).toStringAsFixed(1)} KB');
-        print('   Type: ${image.mimeType}');
-      }
-    } else {
-      print('No images selected');
-    }
-  } catch (e) {
-    print('Error picking images: $e');
-  }
-}
-```
-
-#### 5. `pickVideo()` Method
-```dart
-// Example 1: Pick a single video
-void pickSingleVideo() async {
-  try {
-    final video = await ImagePickerMaster.instance.pickVideo();
-
-    if (video != null) {
-      print('Selected video: ${video.name}');
-      print('File size: ${(video.size / 1024 / 1024).toStringAsFixed(2)} MB');
-      print('MIME Type: ${video.mimeType}');
-      print('File path: ${video.path}');
-    } else {
-      print('No video selected');
-    }
-  } catch (e) {
-    print('Error picking video: $e');
-  }
-}
-```
-
-#### 6. `pickVideos()` Method
-```dart
-// Example 1: Pick multiple videos
-void pickMultipleVideos() async {
-  try {
-    final videos = await ImagePickerMaster.instance.pickVideos();
-
-    if (videos != null && videos.isNotEmpty) {
-      print('${videos.length} videos selected:');
-      double totalSize = 0;
-
-      for (int i = 0; i < videos.length; i++) {
-        final video = videos[i];
-        final sizeInMB = video.size / 1024 / 1024;
-        totalSize += sizeInMB;
-
-        print('${i + 1}. ${video.name}');
-        print('   Size: ${sizeInMB.toStringAsFixed(2)} MB');
-        print('   Path: ${video.path}');
-      }
-
-      print('\nTotal size: ${totalSize.toStringAsFixed(2)} MB');
-    } else {
-      print('No videos selected');
-    }
-  } catch (e) {
-    print('Error picking videos: $e');
-  }
-}
-```
-
-#### 7. `pickAudio()` Method
-```dart
-// Example 1: Pick a single audio file
-void pickSingleAudio() async {
-  try {
-    final audio = await ImagePickerMaster.instance.pickAudio();
-
-    if (audio != null) {
-      print('Selected audio: ${audio.name}');
-      print('File size: ${(audio.size / 1024).toStringAsFixed(1)} KB');
-      print('MIME Type: ${audio.mimeType}');
-      print('File path: ${audio.path}');
-    } else {
-      print('No audio file selected');
-    }
-  } catch (e) {
-    print('Error picking audio: $e');
-  }
+// In State.dispose()
+@override
+void dispose() {
+  ImagePickerMaster.instance.clearTemporaryFiles();
+  super.dispose();
 }
 
-// Example 2: Pick audio with data
-void pickAudioWithData() async {
-  try {
-    final audio = await ImagePickerMaster.instance.pickAudio(
-      withData: true,
-    );
-
-    if (audio != null) {
-      print('Audio file: ${audio.name}');
-      print('Size: ${(audio.size / 1024).toStringAsFixed(1)} KB');
-      
-      if (audio.bytes != null) {
-        print('Audio data available: ${audio.bytes!.length} bytes');
-        // Process audio data here
-      }
-    }
-  } catch (e) {
-    print('Error: $e');
-  }
-}
-```
-
-#### 8. `pickAudios()` Method
-```dart
-// Example 1: Pick multiple audio files
-void pickMultipleAudios() async {
-  try {
-    final audios = await ImagePickerMaster.instance.pickAudios();
-
-    if (audios != null && audios.isNotEmpty) {
-      print('${audios.length} audio files selected:');
-      
-      // Categorize by format
-      final formats = <String, List<PickedFile>>{};
-      
-      for (var audio in audios) {
-        final ext = audio.name.split('.').last.toLowerCase();
-        formats.putIfAbsent(ext.toUpperCase(), () => []).add(audio);
-      }
-      
-      formats.forEach((format, files) {
-        print('\n$format files (${files.length}):');
-        for (var file in files) {
-          final sizeKB = file.size / 1024;
-          print('  • ${file.name} - ${sizeKB.toStringAsFixed(1)} KB');
-        }
-      });
-    } else {
-      print('No audio files selected');
-    }
-  } catch (e) {
-    print('Error picking audios: $e');
-  }
-}
-```
-
-#### 9. `pickDocument()` Method
-```dart
-// Example 1: Pick a single document
-void pickSingleDocument() async {
-  try {
-    final document = await ImagePickerMaster.instance.pickDocument();
-
-    if (document != null) {
-      print('Selected document: ${document.name}');
-      print('File size: ${(document.size / 1024).toStringAsFixed(1)} KB');
-      print('MIME Type: ${document.mimeType}');
-      print('File path: ${document.path}');
-    } else {
-      print('No document selected');
-    }
-  } catch (e) {
-    print('Error picking document: $e');
-  }
-}
-
-// Example 2: Pick specific document types
-void pickSpecificDocuments() async {
-  try {
-    final document = await ImagePickerMaster.instance.pickDocument(
-      allowedExtensions: ['pdf', 'doc', 'docx', 'txt'],
-      withData: true,
-    );
-
-    if (document != null) {
-      print('Document: ${document.name}');
-      print('Type: ${document.mimeType}');
-      print('Size: ${(document.size / 1024).toStringAsFixed(1)} KB');
-      
-      if (document.bytes != null) {
-        print('Document data loaded: ${document.bytes!.length} bytes');
-      }
-    }
-  } catch (e) {
-    print('Error: $e');
-  }
-}
-```
-
-#### 10. `pickDocuments()` Method
-```dart
-// Example 1: Pick multiple documents
-void pickMultipleDocuments() async {
-  try {
-    final documents = await ImagePickerMaster.instance.pickDocuments();
-
-    if (documents != null && documents.isNotEmpty) {
-      print('${documents.length} documents selected:');
-      
-      // Group by file type
-      final categories = <String, List<PickedFile>>{
-        'PDF': [],
-        'Word': [],
-        'Excel': [],
-        'PowerPoint': [],
-        'Text': [],
-        'Other': [],
-      };
-
-      for (var doc in documents) {
-        final ext = doc.name.split('.').last.toLowerCase();
-        if (ext == 'pdf') {
-          categories['PDF']!.add(doc);
-        } else if (['doc', 'docx'].contains(ext)) {
-          categories['Word']!.add(doc);
-        } else if (['xls', 'xlsx'].contains(ext)) {
-          categories['Excel']!.add(doc);
-        } else if (['ppt', 'pptx'].contains(ext)) {
-          categories['PowerPoint']!.add(doc);
-        } else if (['txt', 'md', 'rtf'].contains(ext)) {
-          categories['Text']!.add(doc);
-        } else {
-          categories['Other']!.add(doc);
-        }
-      }
-
-      categories.forEach((category, fileList) {
-        if (fileList.isNotEmpty) {
-          print('\n$category Documents (${fileList.length}):');
-          for (var file in fileList) {
-            final sizeKB = file.size / 1024;
-            print('  • ${file.name} - ${sizeKB.toStringAsFixed(1)} KB');
-          }
-        }
-      });
-    }
-  } catch (e) {
-    print('Error: $e');
-  }
-}
-```
-
-#### 11. `capturePhoto()` Method
-```dart
-// Example 1: Capture a photo with camera
-void capturePhotoFromCamera() async {
-  try {
-    final photo = await ImagePickerMaster.instance.capturePhoto();
-
-    if (photo != null) {
-      print('Photo captured: ${photo.name}');
-      print('File size: ${(photo.size / 1024).toStringAsFixed(1)} KB');
-      print('File path: ${photo.path}');
-      print('MIME Type: ${photo.mimeType}');
-    } else {
-      print('Photo capture cancelled');
-    }
-  } catch (e) {
-    print('Error capturing photo: $e');
-  }
-}
-
-// Example 2: Capture high-quality photo with data
-void captureHighQualityPhoto() async {
-  try {
-    final photo = await ImagePickerMaster.instance.capturePhoto(
-      allowCompression: true,
-      compressionQuality: 95,
-      withData: true,
-    );
-
-    if (photo != null) {
-      print('High-quality photo captured: ${photo.name}');
-      print('Original size: ${(photo.size / 1024).toStringAsFixed(1)} KB');
-      
-      if (photo.bytes != null) {
-        print('Photo data available: ${photo.bytes!.length} bytes');
-        // Process image data immediately
-      }
-    }
-  } catch (e) {
-    print('Error: $e');
-  }
-}
-
-// Example 3: Capture compressed photo for upload
-void captureCompressedPhoto() async {
-  try {
-    final photo = await ImagePickerMaster.instance.capturePhoto(
-      allowCompression: true,
-      compressionQuality: 60, // Lower quality for smaller file size
-      withData: true,
-    );
-
-    if (photo != null) {
-      final sizeKB = photo.size / 1024;
-      print('Compressed photo: ${photo.name}');
-      print('Compressed size: ${sizeKB.toStringAsFixed(1)} KB');
-      
-      // Perfect for uploading to server
-      if (photo.bytes != null && sizeKB < 500) {
-        print('Photo ready for upload (under 500KB)');
-      }
-    }
-  } catch (e) {
-    print('Error: $e');
-  }
-}
-```
-
-#### 12. `clearTemporaryFiles()` Method
-```dart
-// Example 1: Clear temporary files
-void clearTempFiles() async {
-  try {
-    await ImagePickerMaster.instance.clearTemporaryFiles();
-    print('Temporary files cleared successfully');
-  } catch (e) {
-    print('Error clearing temporary files: $e');
-  }
-}
-
-// Example 2: Clear files in app lifecycle
-class MyApp extends StatefulWidget {
-  @override
-  _MyAppState createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    // Clear temporary files when app is disposed
+// Or on app lifecycle changes
+@override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  if (state == AppLifecycleState.paused) {
     ImagePickerMaster.instance.clearTemporaryFiles();
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
   }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
-      // Clear temporary files when app goes to background
-      ImagePickerMaster.instance.clearTemporaryFiles();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      home: MyHomePage(),
-    );
-  }
-}
-
-// Example 3: Periodic cleanup
-void setupPeriodicCleanup() {
-  Timer.periodic(Duration(hours: 1), (timer) async {
-    try {
-      await ImagePickerMaster.instance.clearTemporaryFiles();
-      print('Hourly cleanup completed');
-    } catch (e) {
-      print('Cleanup error: $e');
-    }
-  });
 }
 ```
 
-### File Information
+---
 
-Each picked file returns a `PickedFile` object with:
+## PickedFile Object
+
+Every pick operation returns `PickedFile` (or `List<PickedFile>`):
 
 ```dart
 class PickedFile {
-  final String path;           // File path
-  final String name;           // File name (Unicode supported)
-  final int size;              // File size in bytes
-  final String? mimeType;      // MIME type
-  final List<int>? bytes;      // File bytes (if withData: true)
+  final String     path;      // Absolute path to the temp copy
+  final String     name;      // Filename including extension (Unicode safe)
+  final int        size;      // File size in bytes
+  final String?    mimeType;  // e.g. "image/jpeg", "application/pdf"
+  final Uint8List? bytes;     // Raw bytes — only when withData: true
 }
 ```
+
+### Common patterns with PickedFile
+
+```dart
+// Show image from bytes
+if (file.bytes != null) {
+  Image.memory(file.bytes!)
+}
+
+// Show image from path (mobile/desktop)
+Image.file(File(file.path))
+
+// Format size
+String formatSize(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  return '${(bytes / 1024 / 1024).toStringAsFixed(2)} MB';
+}
+
+// Get extension
+final ext = file.name.split('.').last.toLowerCase();
+
+// Categorize files
+bool isImage = file.mimeType?.startsWith('image/') ?? false;
+bool isVideo = file.mimeType?.startsWith('video/') ?? false;
+bool isAudio = file.mimeType?.startsWith('audio/') ?? false;
+```
+
+---
 
 ## API Reference
 
-### ImagePickerMaster Methods
+### Methods
 
-| Method | Description | Parameters |
-|--------|-------------|------------|
-| `getPlatformVersion()` | Get platform version string | None |
-| `pickFiles()` | Pick any files | `type`, `allowMultiple`, `allowedExtensions`, `withData`, `allowCompression`, `compressionQuality` |
-| `pickImage()` | Pick a single image | `allowCompression`, `compressionQuality`, `withData` |
-| `pickImages()` | Pick multiple images | `allowMultiple`, `allowCompression`, `compressionQuality`, `withData` |
-| `pickVideo()` | Pick a single video | `withData` |
-| `pickVideos()` | Pick multiple videos | `allowMultiple`, `withData` |
-| `pickAudio()` | Pick a single audio file | `withData` |
-| `pickAudios()` | Pick multiple audio files | `allowMultiple`, `withData` |
-| `pickDocument()` | Pick a single document | `allowedExtensions`, `withData` |
-| `pickDocuments()` | Pick multiple documents | `allowMultiple`, `allowedExtensions`, `withData` |
-| `capturePhoto()` | Capture photo with camera | `allowCompression`, `compressionQuality`, `withData` |
-| `clearTemporaryFiles()` | Clear temporary files | None |
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `getPlatformVersion()` | `Future<String?>` | Platform OS version string |
+| `pickFiles({...})` | `Future<List<PickedFile>?>` | Pick one or more files of any type |
+| `pickImage({...})` | `Future<PickedFile?>` | Pick a single image |
+| `pickImages({...})` | `Future<List<PickedFile>?>` | Pick multiple images |
+| `pickVideo({...})` | `Future<PickedFile?>` | Pick a single video |
+| `pickVideos({...})` | `Future<List<PickedFile>?>` | Pick multiple videos |
+| `pickAudio({...})` | `Future<PickedFile?>` | Pick a single audio file |
+| `pickAudios({...})` | `Future<List<PickedFile>?>` | Pick multiple audio files |
+| `pickDocument({...})` | `Future<PickedFile?>` | Pick a single document |
+| `pickDocuments({...})` | `Future<List<PickedFile>?>` | Pick multiple documents |
+| `capturePhoto({...})` | `Future<PickedFile?>` | Capture photo from camera |
+| `clearTemporaryFiles()` | `Future<void>` | Delete all plugin temp files |
 
-### FileType Enum
+### `pickFiles` Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `type` | `FileType` | `FileType.all` | File category filter |
+| `allowMultiple` | `bool` | `false` | Allow selecting multiple files |
+| `allowedExtensions` | `List<String>?` | `null` | Required when `type` is `FileType.custom` |
+| `withData` | `bool` | `false` | Load file bytes into memory |
+| `allowCompression` | `bool` | `false` | Compress images before returning |
+| `compressionQuality` | `int?` | `80` | JPEG quality 0–100 (100 = lossless) |
+
+### `FileType` Enum
 
 ```dart
 enum FileType {
-  all,        // All file types
-  image,      // Image files only
-  video,      // Video files only
-  audio,      // Audio files only
-  document,   // Document files only
-  custom      // Custom extensions only
+  all,       // No filter — all files visible
+  image,     // JPEG, PNG, GIF, BMP, WebP, HEIC, AVIF, SVG, ICO, TIFF
+  video,     // MP4, MOV, AVI, MKV, WMV, FLV, WebM, 3GP, M4V
+  audio,     // MP3, WAV, M4A, FLAC, OGG, AAC, WMA, AIFF
+  document,  // PDF, Word, Excel, PowerPoint, TXT, ODT, EPUB, HTML, ZIP, and more
+  custom,    // Filtered by allowedExtensions list
 }
 ```
 
+---
+
+## Supported Formats
+
+<details>
+<summary><b>Images</b> (click to expand)</summary>
+
+JPEG, PNG, GIF, BMP, TIFF, WebP, HEIC, HEIF, AVIF, SVG, ICO
+
+</details>
+
+<details>
+<summary><b>Videos</b> (click to expand)</summary>
+
+MP4, AVI, MOV, MKV, WMV, FLV, WebM, 3GP, M4V
+
+</details>
+
+<details>
+<summary><b>Audio</b> (click to expand)</summary>
+
+MP3, WAV, M4A, FLAC, OGG, AAC, WMA, AIFF
+
+</details>
+
+<details>
+<summary><b>Documents</b> (click to expand)</summary>
+
+PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, TXT, RTF, Markdown, ODT/ODS/ODP, Pages/Numbers/Keynote, EPUB, HTML, CSS, JS, JSON, XML, CSV, YAML, ZIP, RAR, 7Z, TAR, GZ, TTF, OTF, WOFF
+
+</details>
+
+---
+
 ## Unicode Support
 
-This plugin fully supports Unicode filenames, including:
-- Persian/Farsi: `فاکتور.pdf`, `تصویر.jpg`
-- Arabic: `ملف.docx`, `صورة.png`
-- Chinese: `文档.txt`, `图片.jpeg`
-- And all other Unicode characters
+Full support for non-Latin filenames:
 
-## Platform Support
+```dart
+// These all work correctly
+// Persian:  فاکتور.pdf    تصویر.jpg
+// Arabic:   ملف.docx      صورة.png
+// Chinese:  文档.txt      图片.jpeg
+// Japanese: 写真.heic
+// Korean:   파일.mp4
+```
 
-| Platform | Status |
-|----------|--------|
-| Windows  | ✅ Full support |
-| Android  | ✅ Full support |
-| iOS      | ✅ Full support |
-| macOS    | ✅ Full support |
-| Linux    | ✅ Full support |
-| Web      | ✅ Full support |
+---
 
-## Example
+## Example App
 
-See the [example](example/) directory for a complete sample application demonstrating all features.
+See the [`example/`](example/) directory for a complete working demo of all features.
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
+---
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for version history and updates.
+See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
+---
 
-## Additional information
+## Contributing
 
-If you have any issues, questions, or suggestions related to this package, please feel free to contact us at [swan.dev1993@gmail.com](mailto:swan.dev1993@gmail.com). We welcome your feedback and will do our best to address any problems or provide assistance.
-For more information about this package, you can also visit our [GitHub repository](https://pub.dev/packages/image_picker_master) where you can find additional resources, contribute to the package's development, and file issues or bug reports. We appreciate your contributions and feedback, and we aim to make this package as useful as possible for our users.
-Thank you for using our package, and we look forward to hearing from you!
+Pull requests and issues are welcome at [github.com/SwanFlutter/image_picker_master](https://github.com/SwanFlutter/image_picker_master).
+
+---
+
+## License
+
+MIT License — see [LICENSE](LICENSE) for details.
+
+---
+
+## Contact
+
+For questions or feedback: [swan.dev1993@gmail.com](mailto:swan.dev1993@gmail.com)
