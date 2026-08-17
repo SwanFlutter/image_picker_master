@@ -1,3 +1,9 @@
+## 0.0.6
+
+* **Web:** Replaced `dart:html` with `package:web` (`dart:js_interop`) for full WASM compatibility.
+* **Web:** Rewrote file picker, camera capture, and image compression using `web.*` APIs — no breaking changes to the public API.
+* **pubspec:** Bumped version to `0.0.6`.
+
 ## 0.0.5
 
 * **Android:** Fixed `IllegalStateException: Reply already submitted` crash when camera permission is denied.

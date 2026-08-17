@@ -1,11 +1,9 @@
 // lib/image_picker_master_web.dart
-// ignore_for_file: unreachable_switch_default, deprecated_member_use
+// ignore_for_file: avoid_web_libraries_in_flutter
 
 import 'dart:async';
-import 'dart:convert';
-import 'dart:html' as html;
+import 'dart:js_interop';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:web/web.dart' as web;
@@ -15,108 +13,93 @@ import 'src/tools/file_picker_options.dart';
 import 'src/tools/file_type.dart';
 import 'src/tools/picked_file.dart';
 
-/// A web implementation of [ImagePickerMasterPlatform] that uses HTML file input elements.
-///
-/// This implementation provides file picking functionality for web platforms
-/// using the browser's native file selection dialog.
+/// Web implementation of [ImagePickerMasterPlatform].
+/// Uses package:web (WASM-compatible) instead of dart:html.
 class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
-  /// Creates a new instance of [ImagePickerMasterWeb].
   ImagePickerMasterWeb();
 
-  /// Registers this class as the default instance of [ImagePickerMasterPlatform].
   static void registerWith(Registrar registrar) {
-    // For Flutter 3.9.0 and above, we don't use the registrar parameter
-    // as the plugin registration mechanism has changed
     ImagePickerMasterPlatform.instance = ImagePickerMasterWeb();
   }
 
+  // ─── getPlatformVersion ─────────────────────────────────────────────────
+
   @override
   Future<String?> getPlatformVersion() async {
-    final version = web.window.navigator.userAgent;
-    return version;
+    return web.window.navigator.userAgent;
   }
+
+  // ─── pickFiles ──────────────────────────────────────────────────────────
 
   @override
   Future<List<PickedFile>?> pickFiles(FilePickerOptions options) async {
     final completer = Completer<List<PickedFile>?>();
 
-    try {
-      final input = html.FileUploadInputElement();
-      input.style.display = 'none';
+    // Create a hidden <input type="file"> element
+    final input = web.document.createElement('input') as web.HTMLInputElement;
+    input.type = 'file';
+    input.style.display = 'none';
+    input.accept = _acceptString(options.type, options.allowedExtensions);
+    input.multiple = options.allowMultiple;
 
-      // Set accept attribute based on file type
-      input.accept = _getAcceptString(options.type, options.allowedExtensions);
+    web.document.body!.append(input);
 
-      // Set multiple selection
-      input.multiple = options.allowMultiple;
-
-      // Add to DOM
-      html.document.body?.append(input);
-
-      // Set up event listeners
-      input.onChange.listen((event) async {
-        final files = input.files;
-        if (files != null && files.isNotEmpty) {
-          final pickedFiles = <PickedFile>[];
-
-          for (final file in files) {
-            try {
-              final pickedFile = await _processWebFile(file, options);
-              if (pickedFile != null) {
-                pickedFiles.add(pickedFile);
-              }
-            } catch (e) {
-              debugPrint('Error processing file ${file.name}: $e');
-            }
-          }
-
-          // Remove input from DOM
+    // ── onChange: user selected files ──
+    input.addEventListener(
+      'change',
+      (web.Event _) async {
+        final fileList = input.files;
+        if (fileList == null || fileList.length == 0) {
           input.remove();
-          completer.complete(pickedFiles.isEmpty ? null : pickedFiles);
-        } else {
-          input.remove();
-          completer.complete(null);
+          if (!completer.isCompleted) completer.complete(null);
+          return;
         }
-      });
 
-      input.onError.listen((event) {
+        final results = <PickedFile>[];
+        for (var i = 0; i < fileList.length; i++) {
+          final file = fileList.item(i);
+          if (file == null) continue;
+          final pf = await _processFile(file, options);
+          if (pf != null) results.add(pf);
+        }
+
         input.remove();
-        completer.complete(null);
-      });
-
-      // Handle cancel (when user closes dialog without selecting)
-      final cancelTimer = Timer(const Duration(minutes: 5), () {
         if (!completer.isCompleted) {
-          input.remove();
-          completer.complete(null);
+          completer.complete(results.isEmpty ? null : results);
         }
-      });
+      }.toJS,
+    );
 
-      // Detect window focus to handle cancel
-      html.window.onFocus.listen((event) {
-        Timer(const Duration(milliseconds: 500), () {
-          if (!completer.isCompleted && (input.files?.isEmpty ?? true)) {
-            cancelTimer.cancel();
+    // ── Window focus after dialog close → treat empty selection as cancel ──
+    StreamSubscription<web.Event>? focusSub;
+    focusSub = web.window.onFocus.listen((_) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!completer.isCompleted) {
+          final fl = input.files;
+          if (fl == null || fl.length == 0) {
             input.remove();
+            focusSub?.cancel();
             completer.complete(null);
           }
-        });
+        }
+        focusSub?.cancel();
       });
+    });
 
-      // Trigger file picker
-      input.click();
-    } catch (e) {
-      completer.complete(null);
-    }
+    // Safety timeout (5 min)
+    Future.delayed(const Duration(minutes: 5), () {
+      if (!completer.isCompleted) {
+        input.remove();
+        focusSub?.cancel();
+        completer.complete(null);
+      }
+    });
 
+    input.click();
     return completer.future;
   }
 
-  @override
-  Future<void> clearTemporaryFiles() async {
-    // Web doesn't need temporary file cleanup as files are handled in memory
-    return;
-  }
+  // ─── capturePhoto ────────────────────────────────────────────────────────
 
   @override
   Future<PickedFile?> capturePhoto({
@@ -124,80 +107,71 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
     required int compressionQuality,
     required bool withData,
   }) async {
-    try {
-      // Check if getUserMedia is supported
-      if (!_isGetUserMediaSupported()) {
-        throw PlatformException(
-          code: 'CAMERA_NOT_SUPPORTED',
-          message: 'Camera access is not supported in this browser.',
-        );
-      }
-
-      // Request camera access
-      final stream = await html.window.navigator.mediaDevices?.getUserMedia({
-        'video': true,
-      });
-
-      if (stream == null) {
-        throw PlatformException(
-          code: 'CAMERA_ACCESS_DENIED',
-          message: 'Camera access was denied.',
-        );
-      }
-
-      // Create video element to display camera feed
-      final video = html.VideoElement()
-        ..srcObject = stream
-        ..autoplay = true
-        ..muted = true
-        ..style.width = '100%'
-        ..style.height = '100%';
-
-      // Create canvas for capturing
-      final canvas = html.CanvasElement();
-      final context = canvas.context2D;
-
-      // Create capture UI
-      final result = await _showCameraDialog(video, canvas, context, stream);
-
-      if (result != null) {
-        // Process the captured image
-        Uint8List imageBytes = result;
-
-        if (allowCompression) {
-          imageBytes = await _compressImage(imageBytes, compressionQuality);
-        }
-
-        // Generate a filename with timestamp
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final filename = 'captured_photo_$timestamp.jpg';
-
-        // Create object URL for the captured image
-        final blob = html.Blob([imageBytes], 'image/jpeg');
-        final objectUrl = html.Url.createObjectUrlFromBlob(blob);
-
-        return PickedFile(
-          path: objectUrl,
-          name: filename,
-          size: imageBytes.length,
-          mimeType: 'image/jpeg',
-          bytes: withData ? imageBytes : null,
-        );
-      }
-
-      return null;
-    } catch (e) {
-      if (e is PlatformException) {
-        rethrow;
-      }
+    // Check getUserMedia support
+    if (web.window.navigator.mediaDevices == null) {
       throw PlatformException(
-        code: 'CAMERA_ERROR',
-        message: 'Failed to capture photo: $e',
+        code: 'CAMERA_NOT_SUPPORTED',
+        message: 'Camera is not supported in this browser.',
       );
     }
+
+    web.MediaStream stream;
+    try {
+      final constraints = web.MediaStreamConstraints(video: true.toJS);
+      stream = await web.window.navigator.mediaDevices!
+          .getUserMedia(constraints)
+          .toDart;
+    } catch (_) {
+      throw PlatformException(
+        code: 'CAMERA_ACCESS_DENIED',
+        message: 'Camera permission was denied.',
+      );
+    }
+
+    final imageBytes = await _showCameraDialog(stream);
+
+    // Stop all camera tracks
+    final tracks = stream.getTracks();
+    for (var i = 0; i < tracks.length; i++) {
+      tracks.item(i)?.stop();
+    }
+
+    if (imageBytes == null) return null;
+
+    Uint8List finalBytes = imageBytes;
+    if (allowCompression) {
+      finalBytes = await _compressJpeg(imageBytes, compressionQuality);
+    }
+
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final fileName = 'captured_photo_$timestamp.jpg';
+
+    // Create an object URL so the caller can reference the blob
+    final blob = web.Blob(
+      [finalBytes.toJS].toJS,
+      web.BlobPropertyBag(type: 'image/jpeg'),
+    );
+    final objectUrl = web.URL.createObjectURL(blob);
+
+    return PickedFile(
+      path: objectUrl,
+      name: fileName,
+      size: finalBytes.length,
+      mimeType: 'image/jpeg',
+      bytes: withData ? finalBytes : null,
+    );
   }
 
-  String _getAcceptString(FileType type, List<String>? allowedExtensions) {
+  // ─── clearTemporaryFiles ─────────────────────────────────────────────────
+
+  @override
+  Future<void> clearTemporaryFiles() async {
+    // Web files are in-memory / object-URLs; no temp files to clean up.
+  }
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────
+
+  String _acceptString(FileType type, List<String>? allowedExtensions) {
     switch (type) {
       case FileType.image:
         return 'image/*';
@@ -206,255 +180,253 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
       case FileType.audio:
         return 'audio/*';
       case FileType.document:
-        return '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.rtf';
+        return '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.rtf,'
+            '.odt,.ods,.odp,.epub,.html,.css,.js,.json,.xml,.csv,'
+            '.zip,.rar,.7z,.tar,.gz';
       case FileType.custom:
         if (allowedExtensions != null && allowedExtensions.isNotEmpty) {
-          return allowedExtensions.map((ext) => '.$ext').join(',');
+          return allowedExtensions.map((e) => '.$e').join(',');
         }
         return '*/*';
       case FileType.all:
-      default:
         return '*/*';
     }
   }
 
-  Future<PickedFile?> _processWebFile(
-    html.File file,
+  Future<PickedFile?> _processFile(
+    web.File file,
     FilePickerOptions options,
   ) async {
     try {
-      final reader = html.FileReader();
-      final completer = Completer<Uint8List?>();
+      // Read file bytes via FileReader
+      final reader = web.FileReader();
+      final loadCompleter = Completer<Uint8List?>();
 
-      reader.onLoad.listen((event) {
-        final result = reader.result;
-        if (result is Uint8List) {
-          completer.complete(result);
-        } else if (result is String) {
-          // Handle base64 data URL
-          final dataUrl = result;
-          if (dataUrl.contains(',')) {
-            final base64 = dataUrl.split(',')[1];
-            completer.complete(base64Decode(base64));
-          } else {
-            completer.complete(null);
+      reader.addEventListener(
+        'load',
+        (web.Event _) {
+          final result = reader.result;
+          if (result == null) {
+            loadCompleter.complete(null);
+            return;
           }
-        } else {
-          completer.complete(null);
-        }
-      });
+          // result is a JS ArrayBuffer
+          final jsBuffer = result as JSArrayBuffer;
+          final dartBytes = jsBuffer.toDart.asUint8List();
+          loadCompleter.complete(dartBytes);
+        }.toJS,
+      );
 
-      reader.onError.listen((event) {
-        completer.complete(null);
-      });
+      reader.addEventListener(
+        'error',
+        (web.Event _) => loadCompleter.complete(null).toJS,
+      );
 
-      // Read file as array buffer for binary data
       reader.readAsArrayBuffer(file);
+      Uint8List? bytes = await loadCompleter.future;
+      if (bytes == null) return null;
 
-      Uint8List? fileBytes = await completer.future;
-
-      if (fileBytes == null) {
-        return null;
+      // Compress images if requested
+      if (options.allowCompression && file.type.startsWith('image/')) {
+        bytes = await _compressJpeg(bytes, options.compressionQuality ?? 80);
       }
 
-      // Apply compression for images if requested
-      if (options.allowCompression && _isImageFile(file.type)) {
-        fileBytes = await _compressImage(
-          fileBytes,
-          options.compressionQuality ?? 80,
-        );
-      }
-
-      // Create object URL for file path (web-specific)
-      final objectUrl = html.Url.createObjectUrlFromBlob(file);
+      // Object URL for path
+      final blob = web.Blob(
+        [bytes.toJS].toJS,
+        web.BlobPropertyBag(type: file.type),
+      );
+      final objectUrl = web.URL.createObjectURL(blob);
 
       return PickedFile(
         path: objectUrl,
         name: file.name,
-        size: file.size,
-        mimeType: file.type,
-        bytes: options.withData ? fileBytes : null,
+        size: file.size.toInt(),
+        mimeType: file.type.isEmpty ? null : file.type,
+        bytes: options.withData ? bytes : null,
       );
-    } catch (e) {
-      debugPrint('Error processing file: $e');
+    } catch (_) {
       return null;
     }
   }
 
-  bool _isImageFile(String mimeType) {
-    return mimeType.startsWith('image/');
-  }
-
-  bool _isGetUserMediaSupported() {
-    return html.window.navigator.mediaDevices != null;
-  }
-
-  Future<Uint8List?> _showCameraDialog(
-    html.VideoElement video,
-    html.CanvasElement canvas,
-    html.CanvasRenderingContext2D context,
-    html.MediaStream stream,
-  ) async {
+  /// Shows a modal camera preview and returns JPEG bytes on capture, or null on cancel.
+  Future<Uint8List?> _showCameraDialog(web.MediaStream stream) async {
     final completer = Completer<Uint8List?>();
 
-    // Create modal dialog
-    final overlay = html.DivElement()
-      ..style.position = 'fixed'
-      ..style.top = '0'
-      ..style.left = '0'
-      ..style.width = '100%'
-      ..style.height = '100%'
-      ..style.backgroundColor = 'rgba(0, 0, 0, 0.8)'
-      ..style.zIndex = '9999'
-      ..style.display = 'flex'
-      ..style.alignItems = 'center'
-      ..style.justifyContent = 'center';
+    // ── DOM elements ──
+    final overlay = web.document.createElement('div') as web.HTMLDivElement;
+    _applyStyles(overlay, {
+      'position': 'fixed',
+      'inset': '0',
+      'background': 'rgba(0,0,0,.8)',
+      'z-index': '99999',
+      'display': 'flex',
+      'align-items': 'center',
+      'justify-content': 'center',
+    });
 
-    final dialog = html.DivElement()
-      ..style.backgroundColor = 'white'
-      ..style.borderRadius = '8px'
-      ..style.padding = '20px'
-      ..style.maxWidth = '90%'
-      ..style.maxHeight = '90%'
-      ..style.display = 'flex'
-      ..style.flexDirection = 'column'
-      ..style.alignItems = 'center';
+    final dialog = web.document.createElement('div') as web.HTMLDivElement;
+    _applyStyles(dialog, {
+      'background': '#fff',
+      'border-radius': '10px',
+      'padding': '20px',
+      'display': 'flex',
+      'flex-direction': 'column',
+      'align-items': 'center',
+      'gap': '16px',
+      'max-width': '90vw',
+    });
 
-    final videoContainer = html.DivElement()
-      ..style.width = '400px'
-      ..style.height = '300px'
-      ..style.marginBottom = '20px'
-      ..style.border = '2px solid #ccc'
-      ..style.borderRadius = '4px'
-      ..style.overflow = 'hidden';
+    final video = web.document.createElement('video') as web.HTMLVideoElement;
+    _applyStyles(video, {
+      'width': '400px',
+      'max-width': '80vw',
+      'height': 'auto',
+      'border-radius': '6px',
+      'background': '#000',
+    });
+    video.autoplay = true;
+    video.muted = true;
+    video.srcObject = stream;
 
-    final buttonContainer = html.DivElement()
-      ..style.display = 'flex'
-      ..style.gap = '10px';
+    final btnRow = web.document.createElement('div') as web.HTMLDivElement;
+    _applyStyles(btnRow, {'display': 'flex', 'gap': '12px'});
 
-    final captureButton = html.ButtonElement()
-      ..text = 'Capture Photo'
-      ..style.padding = '10px 20px'
-      ..style.backgroundColor = '#007bff'
-      ..style.color = 'white'
-      ..style.border = 'none'
-      ..style.borderRadius = '4px'
-      ..style.cursor = 'pointer';
+    final captureBtn =
+        web.document.createElement('button') as web.HTMLButtonElement;
+    captureBtn.textContent = '📷  Capture';
+    _applyStyles(captureBtn, {
+      'padding': '10px 24px',
+      'background': '#007bff',
+      'color': '#fff',
+      'border': 'none',
+      'border-radius': '6px',
+      'font-size': '16px',
+      'cursor': 'pointer',
+    });
 
-    final cancelButton = html.ButtonElement()
-      ..text = 'Cancel'
-      ..style.padding = '10px 20px'
-      ..style.backgroundColor = '#6c757d'
-      ..style.color = 'white'
-      ..style.border = 'none'
-      ..style.borderRadius = '4px'
-      ..style.cursor = 'pointer';
+    final cancelBtn =
+        web.document.createElement('button') as web.HTMLButtonElement;
+    cancelBtn.textContent = 'Cancel';
+    _applyStyles(cancelBtn, {
+      'padding': '10px 24px',
+      'background': '#6c757d',
+      'color': '#fff',
+      'border': 'none',
+      'border-radius': '6px',
+      'font-size': '16px',
+      'cursor': 'pointer',
+    });
 
-    // Add elements to DOM
-    videoContainer.append(video);
-    buttonContainer.append(captureButton);
-    buttonContainer.append(cancelButton);
-    dialog.append(videoContainer);
-    dialog.append(buttonContainer);
+    btnRow.append(captureBtn);
+    btnRow.append(cancelBtn);
+    dialog.append(video);
+    dialog.append(btnRow);
     overlay.append(dialog);
-    html.document.body?.append(overlay);
+    web.document.body!.append(overlay);
 
-    // Set up event listeners
-    captureButton.onClick.listen((event) {
-      try {
-        // Set canvas size to video size
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+    // ── Capture ──
+    captureBtn.addEventListener(
+      'click',
+      (web.Event _) {
+        try {
+          final canvas =
+              web.document.createElement('canvas') as web.HTMLCanvasElement;
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          final ctx = canvas.getContext('2d') as web.CanvasRenderingContext2D;
+          ctx.drawImage(video, 0, 0);
 
-        // Draw current video frame to canvas
-        context.drawImage(video, 0, 0);
-
-        // Convert canvas to data URL
-        final dataUrl = canvas.toDataUrl('image/jpeg', 0.8);
-
-        if (dataUrl.contains(',')) {
-          final base64 = dataUrl.split(',')[1];
-          final imageBytes = base64Decode(base64);
-
-          // Stop camera stream
-          stream.getTracks().forEach((track) => track.stop());
-
-          // Remove dialog
+          final dataUrl = canvas.toDataURL('image/jpeg', (0.92).toJS);
+          final base64 = dataUrl.split(',').last;
+          final bytes = _base64ToBytes(base64);
           overlay.remove();
-
-          completer.complete(imageBytes);
-        } else {
-          completer.complete(null);
+          if (!completer.isCompleted) completer.complete(bytes);
+        } catch (_) {
+          overlay.remove();
+          if (!completer.isCompleted) completer.complete(null);
         }
-      } catch (e) {
-        completer.complete(null);
-      }
-    });
+      }.toJS,
+    );
 
-    cancelButton.onClick.listen((event) {
-      // Stop camera stream
-      stream.getTracks().forEach((track) => track.stop());
-
-      // Remove dialog
-      overlay.remove();
-
-      completer.complete(null);
-    });
+    // ── Cancel ──
+    cancelBtn.addEventListener(
+      'click',
+      (web.Event _) {
+        overlay.remove();
+        if (!completer.isCompleted) completer.complete(null);
+      }.toJS,
+    );
 
     return completer.future;
   }
 
-  Future<Uint8List> _compressImage(Uint8List imageBytes, int quality) async {
+  /// Compress JPEG bytes using a canvas element.
+  Future<Uint8List> _compressJpeg(Uint8List bytes, int quality) async {
     try {
-      // Create a canvas element for image manipulation
-      final canvas = html.CanvasElement();
-      final context = canvas.context2D;
+      final blob = web.Blob(
+        [bytes.toJS].toJS,
+        web.BlobPropertyBag(type: 'image/jpeg'),
+      );
+      final url = web.URL.createObjectURL(blob);
 
-      // Create an image element
-      final img = html.ImageElement();
-      final completer = Completer<Uint8List>();
+      final img = web.document.createElement('img') as web.HTMLImageElement;
+      final loadCompleter = Completer<Uint8List>();
 
-      img.onLoad.listen((event) {
-        try {
-          // Set canvas size to image size
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
-
-          // Draw image on canvas
-          context.drawImage(img, 0, 0);
-
-          // Convert to data URL with compression
-          final dataUrl = canvas.toDataUrl('image/jpeg', quality / 100.0);
-
-          if (dataUrl.contains(',')) {
-            final base64 = dataUrl.split(',')[1];
-            final compressedBytes = base64Decode(base64);
-            completer.complete(compressedBytes);
-          } else {
-            completer.complete(imageBytes);
+      img.addEventListener(
+        'load',
+        (web.Event _) {
+          try {
+            final canvas =
+                web.document.createElement('canvas') as web.HTMLCanvasElement;
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            final ctx = canvas.getContext('2d') as web.CanvasRenderingContext2D;
+            ctx.drawImage(img, 0, 0);
+            final dataUrl = canvas.toDataURL(
+              'image/jpeg',
+              (quality / 100.0).toJS,
+            );
+            final base64 = dataUrl.split(',').last;
+            web.URL.revokeObjectURL(url);
+            loadCompleter.complete(_base64ToBytes(base64));
+          } catch (_) {
+            web.URL.revokeObjectURL(url);
+            loadCompleter.complete(bytes);
           }
-        } catch (e) {
-          completer.complete(imageBytes);
-        }
-      });
+        }.toJS,
+      );
 
-      img.onError.listen((event) {
-        completer.complete(imageBytes);
-      });
+      img.addEventListener(
+        'error',
+        (web.Event _) {
+          web.URL.revokeObjectURL(url);
+          loadCompleter.complete(bytes);
+        }.toJS,
+      );
 
-      // Create object URL from bytes
-      final blob = html.Blob([imageBytes]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
       img.src = url;
+      return loadCompleter.future;
+    } catch (_) {
+      return bytes;
+    }
+  }
 
-      final result = await completer.future;
+  /// Convert a base64 string to [Uint8List] without dart:convert dependency on WASM.
+  Uint8List _base64ToBytes(String base64) {
+    // Use browser's atob for WASM-safe decoding
+    final binary = web.window.atob(base64);
+    final bytes = Uint8List(binary.length);
+    for (var i = 0; i < binary.length; i++) {
+      bytes[i] = binary.codeUnitAt(i);
+    }
+    return bytes;
+  }
 
-      // Clean up the object URL
-      html.Url.revokeObjectUrl(url);
-
-      return result;
-    } catch (e) {
-      return imageBytes;
+  void _applyStyles(web.HTMLElement el, Map<String, String> styles) {
+    for (final entry in styles.entries) {
+      el.style.setProperty(entry.key, entry.value);
     }
   }
 }
