@@ -41,27 +41,13 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
     input.multiple = options.allowMultiple;
     web.document.body!.append(input);
 
-    // onChange — user confirmed a selection
+    // onChange — user confirmed a selection.
+    // The handler must be synchronous (void, not Future) for dart:js_interop.
+    // We schedule the async work via unawaited to keep the signature valid.
     input.addEventListener(
       'change',
-      (web.Event _) async {
-        final fileList = input.files;
-        if (fileList == null || fileList.length == 0) {
-          input.remove();
-          if (!completer.isCompleted) completer.complete(null);
-          return;
-        }
-        final results = <PickedFile>[];
-        for (var i = 0; i < fileList.length; i++) {
-          final file = fileList.item(i);
-          if (file == null) continue;
-          final pf = await _processFile(file, options);
-          if (pf != null) results.add(pf);
-        }
-        input.remove();
-        if (!completer.isCompleted) {
-          completer.complete(results.isEmpty ? null : results);
-        }
+      (web.Event _) {
+        _handleFileInputChange(input, options, completer);
       }.toJS,
     );
 
@@ -155,6 +141,35 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
   @override
   Future<void> clearTemporaryFiles() async {
     // Web uses in-memory object URLs — nothing to clean up.
+  }
+
+  // ─── _handleFileInputChange ──────────────────────────────────────────────
+  // Async logic extracted from the onChange JS listener (which must be void).
+
+  void _handleFileInputChange(
+    web.HTMLInputElement input,
+    FilePickerOptions options,
+    Completer<List<PickedFile>?> completer,
+  ) {
+    Future(() async {
+      final fileList = input.files;
+      if (fileList == null || fileList.length == 0) {
+        input.remove();
+        if (!completer.isCompleted) completer.complete(null);
+        return;
+      }
+      final results = <PickedFile>[];
+      for (var i = 0; i < fileList.length; i++) {
+        final file = fileList.item(i);
+        if (file == null) continue;
+        final pf = await _processFile(file, options);
+        if (pf != null) results.add(pf);
+      }
+      input.remove();
+      if (!completer.isCompleted) {
+        completer.complete(results.isEmpty ? null : results);
+      }
+    });
   }
 
   // ─── _acceptString ───────────────────────────────────────────────────────
