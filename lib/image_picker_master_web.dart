@@ -1,5 +1,4 @@
 // lib/image_picker_master_web.dart
-// ignore_for_file: avoid_web_libraries_in_flutter
 
 import 'dart:async';
 import 'dart:js_interop';
@@ -14,7 +13,7 @@ import 'src/tools/file_type.dart';
 import 'src/tools/picked_file.dart';
 
 /// Web implementation of [ImagePickerMasterPlatform].
-/// Uses package:web (WASM-compatible) instead of dart:html.
+/// Uses package:web (WASM-compatible) — dart:html is not used.
 class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
   ImagePickerMasterWeb();
 
@@ -22,29 +21,27 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
     ImagePickerMasterPlatform.instance = ImagePickerMasterWeb();
   }
 
-  // ─── getPlatformVersion ─────────────────────────────────────────────────
+  // ─── getPlatformVersion ──────────────────────────────────────────────────
 
   @override
   Future<String?> getPlatformVersion() async {
     return web.window.navigator.userAgent;
   }
 
-  // ─── pickFiles ──────────────────────────────────────────────────────────
+  // ─── pickFiles ───────────────────────────────────────────────────────────
 
   @override
   Future<List<PickedFile>?> pickFiles(FilePickerOptions options) async {
     final completer = Completer<List<PickedFile>?>();
 
-    // Create a hidden <input type="file"> element
     final input = web.document.createElement('input') as web.HTMLInputElement;
     input.type = 'file';
     input.style.display = 'none';
     input.accept = _acceptString(options.type, options.allowedExtensions);
     input.multiple = options.allowMultiple;
-
     web.document.body!.append(input);
 
-    // ── onChange: user selected files ──
+    // onChange — user confirmed a selection
     input.addEventListener(
       'change',
       (web.Event _) async {
@@ -54,7 +51,6 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
           if (!completer.isCompleted) completer.complete(null);
           return;
         }
-
         final results = <PickedFile>[];
         for (var i = 0; i < fileList.length; i++) {
           final file = fileList.item(i);
@@ -62,7 +58,6 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
           final pf = await _processFile(file, options);
           if (pf != null) results.add(pf);
         }
-
         input.remove();
         if (!completer.isCompleted) {
           completer.complete(results.isEmpty ? null : results);
@@ -70,27 +65,27 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
       }.toJS,
     );
 
-    // ── Window focus after dialog close → treat empty selection as cancel ──
-    StreamSubscription<web.Event>? focusSub;
-    focusSub = web.window.onFocus.listen((_) {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!completer.isCompleted) {
-          final fl = input.files;
-          if (fl == null || fl.length == 0) {
-            input.remove();
-            focusSub?.cancel();
-            completer.complete(null);
+    // Window focus after dialog close → cancel if nothing was selected
+    // Use addEventListener directly because web.Window has no onFocus stream.
+    web.window.addEventListener(
+      'focus',
+      (web.Event _) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (!completer.isCompleted) {
+            final fl = input.files;
+            if (fl == null || fl.length == 0) {
+              input.remove();
+              completer.complete(null);
+            }
           }
-        }
-        focusSub?.cancel();
-      });
-    });
+        });
+      }.toJS,
+    );
 
-    // Safety timeout (5 min)
+    // Safety timeout
     Future.delayed(const Duration(minutes: 5), () {
       if (!completer.isCompleted) {
         input.remove();
-        focusSub?.cancel();
         completer.complete(null);
       }
     });
@@ -107,24 +102,17 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
     required int compressionQuality,
     required bool withData,
   }) async {
-    // Check getUserMedia support
-    if (web.window.navigator.mediaDevices == null) {
-      throw PlatformException(
-        code: 'CAMERA_NOT_SUPPORTED',
-        message: 'Camera is not supported in this browser.',
-      );
-    }
-
+    // mediaDevices is non-nullable in package:web but may be unavailable
     web.MediaStream stream;
     try {
       final constraints = web.MediaStreamConstraints(video: true.toJS);
-      stream = await web.window.navigator.mediaDevices!
+      stream = await web.window.navigator.mediaDevices
           .getUserMedia(constraints)
           .toDart;
     } catch (_) {
       throw PlatformException(
         code: 'CAMERA_ACCESS_DENIED',
-        message: 'Camera permission was denied.',
+        message: 'Camera permission was denied or camera is unavailable.',
       );
     }
 
@@ -133,7 +121,8 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
     // Stop all camera tracks
     final tracks = stream.getTracks();
     for (var i = 0; i < tracks.length; i++) {
-      tracks.item(i)?.stop();
+      final track = tracks[i] as web.MediaStreamTrack?;
+      track?.stop();
     }
 
     if (imageBytes == null) return null;
@@ -146,7 +135,6 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final fileName = 'captured_photo_$timestamp.jpg';
 
-    // Create an object URL so the caller can reference the blob
     final blob = web.Blob(
       [finalBytes.toJS].toJS,
       web.BlobPropertyBag(type: 'image/jpeg'),
@@ -166,10 +154,10 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
 
   @override
   Future<void> clearTemporaryFiles() async {
-    // Web files are in-memory / object-URLs; no temp files to clean up.
+    // Web uses in-memory object URLs — nothing to clean up.
   }
 
-  // ─── Helpers ─────────────────────────────────────────────────────────────
+  // ─── _acceptString ───────────────────────────────────────────────────────
 
   String _acceptString(FileType type, List<String>? allowedExtensions) {
     switch (type) {
@@ -193,12 +181,13 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
     }
   }
 
+  // ─── _processFile ────────────────────────────────────────────────────────
+
   Future<PickedFile?> _processFile(
     web.File file,
     FilePickerOptions options,
   ) async {
     try {
-      // Read file bytes via FileReader
       final reader = web.FileReader();
       final loadCompleter = Completer<Uint8List?>();
 
@@ -210,28 +199,27 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
             loadCompleter.complete(null);
             return;
           }
-          // result is a JS ArrayBuffer
           final jsBuffer = result as JSArrayBuffer;
-          final dartBytes = jsBuffer.toDart.asUint8List();
-          loadCompleter.complete(dartBytes);
+          loadCompleter.complete(jsBuffer.toDart.asUint8List());
         }.toJS,
       );
 
+      // error handler — must be JSFunction, not return void
       reader.addEventListener(
         'error',
-        (web.Event _) => loadCompleter.complete(null).toJS,
+        (web.Event _) {
+          loadCompleter.complete(null);
+        }.toJS,
       );
 
       reader.readAsArrayBuffer(file);
       Uint8List? bytes = await loadCompleter.future;
       if (bytes == null) return null;
 
-      // Compress images if requested
       if (options.allowCompression && file.type.startsWith('image/')) {
         bytes = await _compressJpeg(bytes, options.compressionQuality ?? 80);
       }
 
-      // Object URL for path
       final blob = web.Blob(
         [bytes.toJS].toJS,
         web.BlobPropertyBag(type: file.type),
@@ -250,11 +238,11 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
     }
   }
 
-  /// Shows a modal camera preview and returns JPEG bytes on capture, or null on cancel.
+  // ─── _showCameraDialog ───────────────────────────────────────────────────
+
   Future<Uint8List?> _showCameraDialog(web.MediaStream stream) async {
     final completer = Completer<Uint8List?>();
 
-    // ── DOM elements ──
     final overlay = web.document.createElement('div') as web.HTMLDivElement;
     _applyStyles(overlay, {
       'position': 'fixed',
@@ -326,7 +314,6 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
     overlay.append(dialog);
     web.document.body!.append(overlay);
 
-    // ── Capture ──
     captureBtn.addEventListener(
       'click',
       (web.Event _) {
@@ -337,7 +324,6 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
           canvas.height = video.videoHeight;
           final ctx = canvas.getContext('2d') as web.CanvasRenderingContext2D;
           ctx.drawImage(video, 0, 0);
-
           final dataUrl = canvas.toDataURL('image/jpeg', (0.92).toJS);
           final base64 = dataUrl.split(',').last;
           final bytes = _base64ToBytes(base64);
@@ -350,7 +336,6 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
       }.toJS,
     );
 
-    // ── Cancel ──
     cancelBtn.addEventListener(
       'click',
       (web.Event _) {
@@ -362,7 +347,8 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
     return completer.future;
   }
 
-  /// Compress JPEG bytes using a canvas element.
+  // ─── _compressJpeg ───────────────────────────────────────────────────────
+
   Future<Uint8List> _compressJpeg(Uint8List bytes, int quality) async {
     try {
       final blob = web.Blob(
@@ -370,7 +356,6 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
         web.BlobPropertyBag(type: 'image/jpeg'),
       );
       final url = web.URL.createObjectURL(blob);
-
       final img = web.document.createElement('img') as web.HTMLImageElement;
       final loadCompleter = Completer<Uint8List>();
 
@@ -413,16 +398,18 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
     }
   }
 
-  /// Convert a base64 string to [Uint8List] without dart:convert dependency on WASM.
+  // ─── _base64ToBytes ──────────────────────────────────────────────────────
+
   Uint8List _base64ToBytes(String base64) {
-    // Use browser's atob for WASM-safe decoding
     final binary = web.window.atob(base64);
-    final bytes = Uint8List(binary.length);
+    final result = Uint8List(binary.length);
     for (var i = 0; i < binary.length; i++) {
-      bytes[i] = binary.codeUnitAt(i);
+      result[i] = binary.codeUnitAt(i);
     }
-    return bytes;
+    return result;
   }
+
+  // ─── _applyStyles ────────────────────────────────────────────────────────
 
   void _applyStyles(web.HTMLElement el, Map<String, String> styles) {
     for (final entry in styles.entries) {
