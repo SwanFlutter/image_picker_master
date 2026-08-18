@@ -253,8 +253,6 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      debugPrint('Error picking image: $e'); // پرینت خطا
-
       _showError('Error picking image: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -275,7 +273,6 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      debugPrint('Error picking images: $e'); // پرینت خطا
       _showError('Error picking images: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -292,7 +289,6 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      debugPrint('Error picking video: $e'); // پرینت خطا
       _showError('Error picking video: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -309,7 +305,6 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      debugPrint('Error picking videos: $e'); // پرینت خطا
       _showError('Error picking videos: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -326,7 +321,6 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      debugPrint('Error picking audio: $e'); // پرینت خطا
       _showError('Error picking audio: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -346,7 +340,6 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      debugPrint('Error picking documents: $e'); // پرینت خطا
       _showError('Error picking documents: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -366,7 +359,6 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      debugPrint('Error picking files: $e'); // پرینت خطا
       _showError('Error picking files: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -387,7 +379,6 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       }
     } catch (e) {
-      debugPrint('Error picking custom files: $e'); // پرینت خطا
       _showError('Error picking custom files: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -417,10 +408,7 @@ class _MyHomePageState extends State<MyHomePage> {
         _showError('Camera capture was cancelled or failed');
       }
     } catch (e) {
-      debugPrint('Error capturing photo: $e');
-
-      // Parse the error to provide user-friendly messages
-      String userMessage = _getCameraErrorMessage(e.toString());
+      final userMessage = _getCameraErrorMessage(e.toString());
       _showError(userMessage);
     } finally {
       setState(() => _isLoading = false);
@@ -428,28 +416,27 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   String _getCameraErrorMessage(String error) {
-    // Extract error code from PlatformException format
     if (error.contains('NO_CAMERA_DEVICES_FOUND') ||
         error.contains('NO_CAMERA_FOUND')) {
-      return 'هیچ دوربینی در سیستم یافت نشد. لطفاً دوربین را متصل کنید.';
+      return 'No camera found on this device. Please connect a camera and try again.';
     } else if (error.contains('CAMERA_ACCESS_DENIED')) {
-      return 'دسترسی به دوربین رد شد. لطفاً مجوزهای دوربین را در تنظیمات ویندوز بررسی کنید.';
+      return 'Camera access denied. Please enable camera permissions in your device settings.';
     } else if (error.contains('CAMERA_IN_USE_BY_ANOTHER_APP')) {
-      return 'دوربین توسط برنامه دیگری استفاده می‌شود. لطفاً سایر برنامه‌های دوربین را ببندید.';
+      return 'Camera is in use by another app. Please close other camera apps and try again.';
     } else if (error.contains('CAMERA_DEVICE_DISCONNECTED') ||
         error.contains('CAMERA_DEVICE_INVALIDATED')) {
-      return 'دوربین قطع شده یا از کار افتاده است. لطفاً اتصال دوربین را بررسی کنید.';
+      return 'Camera disconnected or unavailable. Please check the camera connection.';
     } else if (error.contains('MEDIA_FOUNDATION_ERROR')) {
-      return 'قابلیت دوربین در دسترس نیست. سیستم از دوربین پشتیبانی نمی‌کند.';
+      return 'Camera feature is not available. This device does not support camera capture.';
     } else if (error.contains('CAMERA_STREAMING_START_FAILED')) {
-      return 'شروع پخش دوربین ناموفق بود. لطفاً دوربین را دوباره متصل کنید.';
+      return 'Failed to start camera stream. Please reconnect the camera and try again.';
     } else if (error.contains('FRAME_CAPTURE_FAILED') ||
         error.contains('CAMERA_NO_FRAME_AVAILABLE')) {
-      return 'عکس‌گیری ناموفق بود. لطفاً دوباره تلاش کنید.';
+      return 'Photo capture failed. Please try again.';
     } else if (error.contains('CAMERA_CONFIGURATION_FAILED')) {
-      return 'تنظیم دوربین ناموفق بود. ممکن است دوربین سازگار نباشد.';
+      return 'Camera configuration failed. The camera may not be compatible.';
     } else {
-      return 'خطای ناشناخته در دوربین رخ داد. لطفاً دوباره تلاش کنید.';
+      return 'An unknown camera error occurred. Please try again.';
     }
   }
 

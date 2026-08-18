@@ -407,7 +407,7 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
       );
 
       img.src = url;
-      return loadCompleter.future;
+      return await loadCompleter.future;
     } catch (_) {
       return bytes;
     }

@@ -1,4 +1,13 @@
-## 0.0.6
+## 0.0.7
+
+* **Android:** Added `res/xml/file_paths.xml` resource required by `FileProvider` — fixes `AAPT: error: resource xml/file_paths not found` build failure in host apps.
+* **Android:** Downgraded AGP from `9.0.1` → `8.7.3` and Gradle wrapper from `9.1.0` → `8.11.1` to resolve Kotlin daemon incremental cache corruption (`IllegalStateException: Storage already registered`).
+* **Android:** Pinned Kotlin Gradle Plugin to `2.1.21` (replaced non-existent `2.3.20`).
+* **Web:** Fixed `unawaited_futures` lint — added `await` to `loadCompleter.future` inside `_compressJpeg` so exceptions are properly caught by the surrounding `try/catch`.
+* **Example:** Removed all `debugPrint` calls from `example/lib/main.dart`.
+* **Example:** Translated camera error messages in `_getCameraErrorMessage` from Persian to English.
+
+
 
 * **Web:** Replaced `dart:html` with `package:web` (`dart:js_interop`) for full WASM compatibility.
 * **Web:** Rewrote file picker, camera capture, and image compression using `web.*` APIs — no breaking changes to the public API.

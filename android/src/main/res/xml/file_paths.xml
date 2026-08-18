@@ -1,9 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-files-path name="my_images" path="Pictures" />
-    <external-files-path name="my_movies" path="Movies" />
-    <external-files-path name="my_audios" path="Music" />
-    <external-files-path name="my_documents" path="Documents" />
-    <cache-path name="cache" path="." />
-    <external-cache-path name="external_cache" path="." />
+    <!-- فایل‌های داخلی اپ -->
+    <files-path
+        name="image_picker_master_images"
+        path="." />
+    <!-- فایل‌های cache داخلی -->
+    <cache-path
+        name="image_picker_master_cache"
+        path="." />
+    <!-- فایل‌های external cache -->
+    <external-cache-path
+        name="image_picker_master_external_cache"
+        path="." />
+    <!-- فایل‌های external storage -->
+    <external-files-path
+        name="image_picker_master_external_files"
+        path="." />
+    <!-- ریشه external storage (برای دستگاه‌های قدیمی‌تر) -->
+    <external-path
+        name="image_picker_master_external"
+        path="." />
 </paths>

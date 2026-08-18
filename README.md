@@ -49,7 +49,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  image_picker_master: ^0.0.6
+  image_picker_master: ^0.0.7
 
 Then run:
 

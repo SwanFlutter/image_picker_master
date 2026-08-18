@@ -3,20 +3,25 @@ version = "1.0-SNAPSHOT"
 
 plugins {
     id("com.android.library")
-    // kotlin-android is intentionally omitted — this plugin uses AGP 9.0+
-    // built-in Kotlin support (android.builtInKotlin=true).
-    // KGP is no longer applied manually; AGP provides Kotlin compilation.
+    // kotlin-android را اینجا اضافه نکن — pub.dev آن را legacy flag می‌کند
 }
 
-val agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.substringBefore('.').toInt()
+// KGP را فقط وقتی host آن را نخواسته apply کن.
+// builtInKotlin=true  → AGP 9 خودش Kotlin را فراهم می‌کند → apply نکن
+// builtInKotlin=false → باید خودمان apply کنیم
+val builtInKotlin = providers
+    .gradleProperty("android.builtInKotlin")
+    .orElse("false")
+    .get()
+    .trim()
+    .equals("true", ignoreCase = true)
 
-if (agpMajor < 9) {
+if (!builtInKotlin) {
     apply(plugin = "org.jetbrains.kotlin.android")
 }
 
 android {
     namespace = "com.example.image_picker_master"
-
     compileSdk = 36
 
     compileOptions {
@@ -27,6 +32,7 @@ android {
     sourceSets {
         getByName("main") {
             java.srcDirs("src/main/kotlin")
+            res.srcDirs("src/main/res")
         }
         getByName("test") {
             java.srcDirs("src/test/kotlin")
@@ -42,7 +48,9 @@ android {
             isIncludeAndroidResources = true
             all {
                 it.useJUnitPlatform()
+
                 it.outputs.upToDateWhen { false }
+
                 it.testLogging {
                     events("passed", "skipped", "failed", "standardOut", "standardError")
                     showStandardStreams = true
@@ -52,7 +60,12 @@ android {
     }
 }
 
-kotlin {
+// به‌جای بلاک top-level kotlin{}، از configure استفاده کن
+// چون KGP به‌صورت شرطی apply می‌شود و ممکن است در حالت builtInKotlin=true
+// اصلاً apply نشده باشد؛ این متد هم با AGP 8 و هم AGP 9 کار می‌کند
+project.extensions.configure(
+    org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension::class.java
+) {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }

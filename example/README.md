@@ -1,6 +1,6 @@
-# image_picker_master_example
+# example
 
-Demonstrates how to use the image_picker_master plugin.
+A new Flutter project.
 
 ## Getting Started
 
