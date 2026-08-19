@@ -69,4 +69,25 @@ abstract class ImagePickerMasterPlatform extends PlatformInterface {
   Future<void> clearTemporaryFiles() {
     throw UnimplementedError('clearTemporaryFiles() has not been implemented.');
   }
+
+  /// Resizes an image natively for use in a cropper UI.
+  ///
+  /// Uses Android's `BitmapFactory.inSampleSize` / platform-native equivalents
+  /// to decode only a fraction of the pixels, making resize ~50–150 ms instead
+  /// of the ~10 s that pure-Dart decode takes on a 2+ MB JPEG.
+  ///
+  /// [path] is the absolute path to the source image file.
+  /// [maxSize] is the maximum width **or** height of the output (default 1024).
+  ///
+  /// Returns the absolute path of the resized image written to the plugin's
+  /// cache directory, or [path] unchanged if the image already fits within
+  /// [maxSize] or if a native error occurred (so the cropper never crashes).
+  Future<String?> resizeImageForCropper({
+    required String path,
+    int maxSize = 1024,
+  }) {
+    throw UnimplementedError(
+      'resizeImageForCropper() has not been implemented.',
+    );
+  }
 }

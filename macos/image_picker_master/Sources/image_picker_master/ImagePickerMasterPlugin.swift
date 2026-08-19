@@ -46,6 +46,13 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin, AVCapturePhotoCap
             }
             capturePhoto(arguments: arguments)
 
+        case "resizeImageForCropper":
+            guard let arguments = call.arguments as? [String: Any] else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments", details: nil))
+                return
+            }
+            resizeImageForCropper(arguments: arguments)
+
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -418,6 +425,83 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin, AVCapturePhotoCap
             try? FileManager.default.removeItem(at: url)
         }
         temporaryFiles.removeAll()
+    }
+
+    // ─── resizeImageForCropper ────────────────────────────────────────────
+    // Uses CGImageSourceCreateThumbnailAtIndex — macOS native ImageIO path.
+    // Decodes only a thumbnail-sized copy; no full-resolution pixel decode.
+
+    private func resizeImageForCropper(arguments: [String: Any]) {
+        guard let filePath = arguments["path"] as? String else {
+            result?(FlutterError(code: "INVALID_ARGUMENTS",
+                                 message: "path is required", details: nil))
+            return
+        }
+        let maxSize = arguments["maxSize"] as? Int ?? 1024
+        let capturedResult = result  // capture before async
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let fileURL = URL(fileURLWithPath: filePath)
+
+            // ── Step 1: read dimensions without full decode ───────────────
+            guard let imageSource = CGImageSourceCreateWithURL(fileURL as CFURL, nil) else {
+                DispatchQueue.main.async { capturedResult?(filePath) }
+                return
+            }
+
+            let props = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil)
+                as? [CFString: Any]
+            let origW = props?[kCGImagePropertyPixelWidth]  as? Int ?? 0
+            let origH = props?[kCGImagePropertyPixelHeight] as? Int ?? 0
+
+            if origW <= maxSize && origH <= maxSize && origW > 0 {
+                DispatchQueue.main.async { capturedResult?(filePath) }
+                return
+            }
+
+            // ── Step 2: native thumbnail at maxSize ───────────────────────
+            let thumbOpts: [CFString: Any] = [
+                kCGImageSourceThumbnailMaxPixelSize: maxSize,
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: false
+            ]
+            guard let cgThumb = CGImageSourceCreateThumbnailAtIndex(
+                imageSource, 0, thumbOpts as CFDictionary) else {
+                DispatchQueue.main.async { capturedResult?(filePath) }
+                return
+            }
+
+            // ── Step 3: encode to JPEG and write to cache ─────────────────
+            let nsImage = NSImage(cgImage: cgThumb,
+                                  size: NSSize(width: cgThumb.width,
+                                               height: cgThumb.height))
+            guard let cgFinal = nsImage.cgImage(forProposedRect: nil,
+                                                context: nil, hints: nil) else {
+                DispatchQueue.main.async { capturedResult?(filePath) }
+                return
+            }
+            let bitmapRep = NSBitmapImageRep(cgImage: cgFinal)
+            guard let jpegData = bitmapRep.representation(
+                using: .jpeg, properties: [.compressionFactor: 0.85]) else {
+                DispatchQueue.main.async { capturedResult?(filePath) }
+                return
+            }
+
+            let outDir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("cropper_preview")
+            do {
+                try FileManager.default.createDirectory(
+                    at: outDir, withIntermediateDirectories: true)
+                let outURL = outDir.appendingPathComponent(
+                    "preview_\(UUID().uuidString).jpg")
+                try jpegData.write(to: outURL)
+                self.temporaryFiles.append(outURL)
+                DispatchQueue.main.async { capturedResult?(outURL.path) }
+            } catch {
+                DispatchQueue.main.async { capturedResult?(filePath) }
+            }
+        }
     }
 
     private func capturePhoto(arguments: [String: Any]) {

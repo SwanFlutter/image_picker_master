@@ -1,4 +1,24 @@
-## 0.0.7
+## 0.0.9
+
+* **iOS:** Added `resizeImageForCropper()` — uses `CGImageSourceCreateThumbnailAtIndex` (ImageIO framework) for native thumbnail decode with EXIF rotation support. Completes in ~50 ms vs ~10 s in pure Dart.
+* **macOS:** Added `resizeImageForCropper()` — same ImageIO path as iOS; encodes via `NSBitmapImageRep` JPEG compression.
+* **Windows:** Added `resizeImageForCropper()` — uses GDI+ `Bitmap::GetThumbnailImage` on a background `std::thread`. Output written to `%TEMP%\cropper_preview\`.
+* **Linux:** Added `resizeImageForCropper()` — uses `gdk_pixbuf_scale_simple` with `GDK_INTERP_BILINEAR` (native C). Output written to `/tmp/cropper_preview/`.
+* **Web:** Added `resizeImageForCropper()` — loads the blob URL into an `<img>`, draws it at target size via `CanvasRenderingContext2D.drawImage` (browser native compositor), returns a new JPEG blob URL.
+* **Web stub:** Added matching `resizeImageForCropper()` override.
+
+
+
+* **Android:** Added `resizeImageForCropper()` method — uses `BitmapFactory.inSampleSize` for native resize, reducing a ~10 s pure-Dart decode on a 2 MB JPEG to ~50–150 ms.
+  - Reads image dimensions first with `inJustDecodeBounds` (zero pixel decode).
+  - Calculates the optimal `inSampleSize` to fit within `maxSize` in one pass.
+  - Fine-tunes with `createScaledBitmap` if needed.
+  - Uses `RGB_565` config to halve memory usage during decode.
+  - Writes result to `caches/cropper_preview/` and tracks it for `clearTemporaryFiles()`.
+  - Falls back to the original path on any error so the cropper never crashes.
+* **Dart:** Added `resizeImageForCropper({required String path, int maxSize = 1024})` to `ImagePickerMasterPlatform`, `MethodChannelImagePickerMaster`, and `ImagePickerMaster`.
+
+
 
 * **Android:** Added `res/xml/file_paths.xml` resource required by `FileProvider` — fixes `AAPT: error: resource xml/file_paths not found` build failure in host apps.
 * **Android:** Downgraded AGP from `9.0.1` → `8.7.3` and Gradle wrapper from `9.1.0` → `8.11.1` to resolve Kotlin daemon incremental cache corruption (`IllegalStateException: Storage already registered`).

@@ -10,6 +10,7 @@
 #include <map>
 #include <filesystem>
 #include <fstream>
+#include <thread>
 #include <objbase.h>   // COM functions
 #include <combaseapi.h> // For CoCreateGuid
 #include <mfapi.h>
@@ -112,6 +113,14 @@ namespace image_picker_master {
             const auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
             if (arguments) {
                 CapturePhoto(*arguments, std::move(result));
+            } else {
+                result->Error("INVALID_ARGUMENTS", "Invalid arguments provided");
+            }
+        }
+        else if (method_call.method_name().compare("resizeImageForCropper") == 0) {
+            const auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+            if (arguments) {
+                ResizeImageForCropper(*arguments, std::move(result));
             } else {
                 result->Error("INVALID_ARGUMENTS", "Invalid arguments provided");
             }
@@ -1169,6 +1178,125 @@ namespace image_picker_master {
         }
         
         return "An unknown camera error occurred: " + error_code;
+    }
+
+    // ─── ResizeImageForCropper ─────────────────────────────────────────────
+    // Uses GDI+ Bitmap::GetThumbnailImage for fast native downscale.
+    // Runs on a background thread via std::thread to avoid blocking the UI.
+
+    void ImagePickerMasterPlugin::ResizeImageForCropper(
+            const flutter::EncodableMap& arguments,
+            std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+
+        std::string file_path;
+        int max_size = 1024;
+
+        auto path_it = arguments.find(flutter::EncodableValue("path"));
+        if (path_it != arguments.end()) {
+            if (const auto* s = std::get_if<std::string>(&path_it->second)) {
+                file_path = *s;
+            }
+        }
+        if (file_path.empty()) {
+            result->Error("INVALID_ARGUMENTS", "path is required");
+            return;
+        }
+
+        auto size_it = arguments.find(flutter::EncodableValue("maxSize"));
+        if (size_it != arguments.end()) {
+            if (const auto* i = std::get_if<int>(&size_it->second)) {
+                max_size = *i;
+            }
+        }
+
+        // Move result into shared_ptr so the lambda can own it across threads
+        auto shared_result = std::shared_ptr<flutter::MethodResult<flutter::EncodableValue>>(
+            std::move(result));
+
+        std::thread([this, file_path, max_size, shared_result]() {
+            // Convert UTF-8 path to wide string for GDI+
+            int wlen = MultiByteToWideChar(CP_UTF8, 0, file_path.c_str(), -1, nullptr, 0);
+            std::wstring wpath(wlen, L'\0');
+            MultiByteToWideChar(CP_UTF8, 0, file_path.c_str(), -1, &wpath[0], wlen);
+
+            // ── Step 1: load source image via GDI+ ───────────────────────
+            Gdiplus::Bitmap* src = Gdiplus::Bitmap::FromFile(wpath.c_str());
+            if (!src || src->GetLastStatus() != Gdiplus::Ok) {
+                delete src;
+                shared_result->Success(flutter::EncodableValue(file_path));
+                return;
+            }
+
+            UINT origW = src->GetWidth();
+            UINT origH = src->GetHeight();
+
+            // Already fits — return original path
+            if (origW <= static_cast<UINT>(max_size) &&
+                origH <= static_cast<UINT>(max_size)) {
+                delete src;
+                shared_result->Success(flutter::EncodableValue(file_path));
+                return;
+            }
+
+            // ── Step 2: compute target size preserving aspect ratio ───────
+            float scale = static_cast<float>(max_size) /
+                          static_cast<float>(std::max(origW, origH));
+            int newW = static_cast<int>(origW * scale);
+            int newH = static_cast<int>(origH * scale);
+
+            // ── Step 3: GetThumbnailImage (native GDI+ fast path) ─────────
+            Gdiplus::Image* thumb = src->GetThumbnailImage(newW, newH, nullptr, nullptr);
+            delete src;
+
+            if (!thumb) {
+                shared_result->Success(flutter::EncodableValue(file_path));
+                return;
+            }
+
+            // ── Step 4: encode to JPEG and save to temp directory ─────────
+            std::string out_path = CreateTempFilePath("jpg");
+            // Replace prefix so it lands in a cropper_preview sub-folder
+            {
+                wchar_t temp_dir_buf[MAX_PATH];
+                if (GetTempPathW(MAX_PATH, temp_dir_buf)) {
+                    std::wstring temp_dir(temp_dir_buf);
+                    temp_dir += L"cropper_preview\\";
+                    CreateDirectoryW(temp_dir.c_str(), nullptr);
+                    // Build wide out path
+                    CLSID jpgClsid;
+                    GetImageEncoder(L"image/jpeg", &jpgClsid);
+                    std::wstring wout = temp_dir + L"preview_" +
+                        std::wstring(out_path.begin(), out_path.end()) + L".jpg";
+
+                    // Use GDI+ JPEG encoder with quality parameter
+                    Gdiplus::EncoderParameters encoderParams;
+                    encoderParams.Count = 1;
+                    encoderParams.Parameter[0].Guid = Gdiplus::EncoderQuality;
+                    encoderParams.Parameter[0].Type = Gdiplus::EncoderParameterValueTypeLong;
+                    encoderParams.Parameter[0].NumberOfValues = 1;
+                    ULONG quality = 85;
+                    encoderParams.Parameter[0].Value = &quality;
+
+                    Gdiplus::Status status = thumb->Save(wout.c_str(), &jpgClsid, &encoderParams);
+                    delete thumb;
+
+                    if (status == Gdiplus::Ok) {
+                        // Convert wide out path back to UTF-8
+                        int ulen = WideCharToMultiByte(CP_UTF8, 0, wout.c_str(), -1,
+                                                       nullptr, 0, nullptr, nullptr);
+                        std::string utf8_out(ulen - 1, '\0');
+                        WideCharToMultiByte(CP_UTF8, 0, wout.c_str(), -1,
+                                            &utf8_out[0], ulen, nullptr, nullptr);
+                        temporary_files_.push_back(utf8_out);
+                        shared_result->Success(flutter::EncodableValue(utf8_out));
+                        return;
+                    }
+                }
+            }
+            // Fallback
+            delete thumb;
+            shared_result->Success(flutter::EncodableValue(file_path));
+        }).detach();
     }
 
 }  // namespace image_picker_master

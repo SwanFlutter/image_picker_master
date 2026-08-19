@@ -78,6 +78,10 @@ namespace image_picker_master {
                 const flutter::EncodableMap& arguments,
                 std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 
+        void ResizeImageForCropper(
+                const flutter::EncodableMap& arguments,
+                std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
         // Camera capture helpers
         bool InitializeMediaFoundation();
         void ShutdownMediaFoundation();

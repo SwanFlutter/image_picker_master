@@ -389,4 +389,36 @@ class ImagePickerMaster {
   Future<void> clearTemporaryFiles() async {
     return ImagePickerMasterPlatform.instance.clearTemporaryFiles();
   }
+
+  /// Resizes an image natively for use in a cropper UI.
+  ///
+  /// Unlike pure-Dart decode (which can take ~10 s on a 2 MB JPEG),
+  /// this method uses the platform's native decoder with `inSampleSize`
+  /// (Android) or equivalent, completing in ~50–150 ms.
+  ///
+  /// [path] is the absolute path to the source image on disk.
+  /// [maxSize] is the maximum edge length (width or height) of the
+  /// output image in pixels. Defaults to 1024.
+  ///
+  /// Returns the path to the resized image in the plugin cache directory,
+  /// or [path] itself when the image already fits within [maxSize] or when
+  /// a native error occurs — so callers never receive `null`.
+  ///
+  /// Example:
+  /// ```dart
+  /// final previewPath = await ImagePickerMaster.instance.resizeImageForCropper(
+  ///   path: pickedFile.path,
+  ///   maxSize: 1024,
+  /// );
+  /// // Use previewPath as the input to your cropper widget
+  /// ```
+  Future<String?> resizeImageForCropper({
+    required String path,
+    int maxSize = 1024,
+  }) {
+    return ImagePickerMasterPlatform.instance.resizeImageForCropper(
+      path: path,
+      maxSize: maxSize,
+    );
+  }
 }

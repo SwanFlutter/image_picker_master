@@ -90,6 +90,14 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
             clearAllTemporaryFiles()
             result(nil)
 
+        case "resizeImageForCropper":
+            guard let args = call.arguments as? [String: Any] else {
+                result(FlutterError(code: "INVALID_ARGUMENTS",
+                                    message: "Arguments must be a map", details: nil))
+                return
+            }
+            resizeImageForCropper(arguments: args, result: result)
+
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -501,6 +509,76 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
             try? FileManager.default.removeItem(at: url)
         }
         allTemporaryFiles.removeAll()
+    }
+
+    // ─── resizeImageForCropper ────────────────────────────────────────────
+    // Uses Core Image / CGImage to decode only what's needed via thumbnail API.
+    // CGImageSourceCreateThumbnailAtIndex is the iOS equivalent of Android's
+    // inSampleSize — it decodes a downscaled copy in native C, not pure Swift.
+
+    private func resizeImageForCropper(arguments: [String: Any],
+                                       result: @escaping FlutterResult) {
+        guard let filePath = arguments["path"] as? String else {
+            result(FlutterError(code: "INVALID_ARGUMENTS",
+                                message: "path is required", details: nil))
+            return
+        }
+        let maxSize = arguments["maxSize"] as? Int ?? 1024
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let fileURL = URL(fileURLWithPath: filePath)
+
+            // ── Step 1: fast thumbnail via ImageIO (no full decode) ──────
+            guard let imageSource = CGImageSourceCreateWithURL(fileURL as CFURL, nil) else {
+                // Source creation failed — return original path
+                DispatchQueue.main.async { result(filePath) }
+                return
+            }
+
+            let props = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any]
+            let origW = props?[kCGImagePropertyPixelWidth]  as? Int ?? 0
+            let origH = props?[kCGImagePropertyPixelHeight] as? Int ?? 0
+
+            // Already fits — return original path immediately
+            if origW <= maxSize && origH <= maxSize && origW > 0 {
+                DispatchQueue.main.async { result(filePath) }
+                return
+            }
+
+            // ── Step 2: decode thumbnail at maxSize (native, fast) ───────
+            let thumbOpts: [CFString: Any] = [
+                kCGImageSourceThumbnailMaxPixelSize: maxSize,
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,  // respect EXIF rotation
+                kCGImageSourceShouldCacheImmediately: false
+            ]
+            guard let cgThumb = CGImageSourceCreateThumbnailAtIndex(
+                imageSource, 0, thumbOpts as CFDictionary) else {
+                DispatchQueue.main.async { result(filePath) }
+                return
+            }
+
+            // ── Step 3: encode to JPEG and write to cache ─────────────────
+            let uiThumb = UIImage(cgImage: cgThumb)
+            guard let jpegData = uiThumb.jpegData(compressionQuality: 0.85) else {
+                DispatchQueue.main.async { result(filePath) }
+                return
+            }
+
+            let outDir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("cropper_preview")
+            do {
+                try FileManager.default.createDirectory(
+                    at: outDir, withIntermediateDirectories: true)
+                let outURL = outDir.appendingPathComponent(
+                    "preview_\(UUID().uuidString).jpg")
+                try jpegData.write(to: outURL)
+                self.allTemporaryFiles.append(outURL)
+                DispatchQueue.main.async { result(outURL.path) }
+            } catch {
+                DispatchQueue.main.async { result(filePath) }
+            }
+        }
     }
 
     // ─── Document UTType lists ────────────────────────────────────────────

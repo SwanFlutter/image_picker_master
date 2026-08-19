@@ -143,6 +143,84 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
     // Web uses in-memory object URLs — nothing to clean up.
   }
 
+  // ─── resizeImageForCropper ────────────────────────────────────────────────
+  // On web, "path" is an object URL (blob:...). We load it into an <img>,
+  // draw it onto a <canvas> at the target size, and export as JPEG.
+  // The Canvas 2D API downscale runs in the browser's native C++ compositor,
+  // so it is far faster than pure-Dart pixel manipulation.
+
+  @override
+  Future<String?> resizeImageForCropper({
+    required String path,
+    int maxSize = 1024,
+  }) async {
+    try {
+      // ── Step 1: load the image from the object URL ─────────────────────
+      final img = web.document.createElement('img') as web.HTMLImageElement;
+      final loadCompleter = Completer<bool>();
+
+      img.addEventListener(
+        'load',
+        (web.Event _) {
+          loadCompleter.complete(true);
+        }.toJS,
+      );
+      img.addEventListener(
+        'error',
+        (web.Event _) {
+          loadCompleter.complete(false);
+        }.toJS,
+      );
+      img.src = path;
+      final loaded = await loadCompleter.future;
+      if (!loaded) return path;
+
+      final origW = img.naturalWidth;
+      final origH = img.naturalHeight;
+
+      // Already fits — return original path
+      if (origW <= maxSize && origH <= maxSize) return path;
+
+      // ── Step 2: compute target dimensions (preserve aspect ratio) ──────
+      final larger = origW > origH ? origW : origH;
+      final scale = maxSize / larger;
+      final newW = (origW * scale).round();
+      final newH = (origH * scale).round();
+
+      // ── Step 3: draw at target size on a canvas (native browser path) ──
+      final canvas =
+          web.document.createElement('canvas') as web.HTMLCanvasElement;
+      canvas.width = newW;
+      canvas.height = newH;
+      final ctx = canvas.getContext('2d') as web.CanvasRenderingContext2D;
+      // drawImage with sx/sy/sw/sh/dx/dy/dw/dh triggers the browser's native
+      // bilinear/bicubic downscale — no JS pixel loop required.
+      ctx.drawImage(
+        img,
+        0,
+        0,
+        origW.toDouble(),
+        origH.toDouble(),
+        0,
+        0,
+        newW.toDouble(),
+        newH.toDouble(),
+      );
+
+      // ── Step 4: export as JPEG object URL ──────────────────────────────
+      final dataUrl = canvas.toDataURL('image/jpeg', (0.85).toJS);
+      final base64 = dataUrl.split(',').last;
+      final bytes = _base64ToBytes(base64);
+      final blob = web.Blob(
+        [bytes.toJS].toJS,
+        web.BlobPropertyBag(type: 'image/jpeg'),
+      );
+      return web.URL.createObjectURL(blob);
+    } catch (_) {
+      return path;
+    }
+  }
+
   // ─── _handleFileInputChange ──────────────────────────────────────────────
   // Async logic extracted from the onChange JS listener (which must be void).
 

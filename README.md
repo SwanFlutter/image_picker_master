@@ -49,7 +49,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  image_picker_master: ^0.0.7
+  image_picker_master: ^0.0.9
 
 Then run:
 
@@ -353,6 +353,7 @@ bool isAudio = file.mimeType?.startsWith('audio/') ?? false;
 | `pickDocuments({...})` | `Future<List<PickedFile>?>` | Pick multiple documents |
 | `capturePhoto({...})` | `Future<PickedFile?>` | Capture photo from camera |
 | `clearTemporaryFiles()` | `Future<void>` | Delete all plugin temp files |
+| `resizeImageForCropper({required path, maxSize})` | `Future<String?>` | Native resize for cropper preview (~50–150 ms vs ~10 s in Dart) |
 
 ### `pickFiles` Parameters
 

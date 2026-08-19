@@ -74,4 +74,21 @@ class MethodChannelImagePickerMaster extends ImagePickerMasterPlatform {
       // Handle error silently
     }
   }
+
+  @override
+  Future<String?> resizeImageForCropper({
+    required String path,
+    int maxSize = 1024,
+  }) async {
+    try {
+      final result = await methodChannel.invokeMethod<String>(
+        'resizeImageForCropper',
+        {'path': path, 'maxSize': maxSize},
+      );
+      return result;
+    } on PlatformException {
+      // On error return the original path so the cropper still works
+      return path;
+    }
+  }
 }

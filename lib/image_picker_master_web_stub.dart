@@ -46,4 +46,14 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
       'Web implementation is not supported on this platform',
     );
   }
+
+  @override
+  Future<String?> resizeImageForCropper({
+    required String path,
+    int maxSize = 1024,
+  }) async {
+    throw UnsupportedError(
+      'Web implementation is not supported on this platform',
+    );
+  }
 }

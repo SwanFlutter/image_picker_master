@@ -28,6 +28,14 @@ class MockImagePickerMasterPlatform
   Future<List<PickedFile>?> pickFiles(FilePickerOptions options) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<String?> resizeImageForCropper({
+    required String path,
+    int maxSize = 1024,
+  }) {
+    throw UnimplementedError();
+  }
 }
 
 void main() {

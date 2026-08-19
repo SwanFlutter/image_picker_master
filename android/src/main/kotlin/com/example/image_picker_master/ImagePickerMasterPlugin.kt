@@ -123,6 +123,13 @@ class ImagePickerMasterPlugin :
                 clearTemporaryFiles()
                 pendingResult?.success(null)
             }
+            "resizeImageForCropper" -> {
+                val arguments = call.arguments as? Map<*, *> ?: run {
+                    pendingResult?.error("INVALID_ARGUMENTS", "Arguments must be a map", null)
+                    return
+                }
+                resizeImageForCropper(arguments)
+            }
             else -> {
                 pendingResult?.notImplemented()
             }
@@ -409,6 +416,83 @@ class ImagePickerMasterPlugin :
         } catch (e: Exception) {
             original
         }
+    }
+
+    // ─── resizeImageForCropper ─────────────────────────────────────────────
+    // Decodes only 1/sampleSize² of the pixels using inSampleSize — the same
+    // work that took Dart ~10 s takes ~50–150 ms here in native C++.
+
+    private fun resizeImageForCropper(arguments: Map<*, *>) {
+        val filePath = arguments["path"] as? String ?: run {
+            pendingResult?.error("INVALID_ARGUMENTS", "path is required", null)
+            return
+        }
+        val maxSize = arguments["maxSize"] as? Int ?: 1024
+
+        Thread {
+            try {
+                // ── Step 1: read dimensions only (no pixel decode) ────────
+                val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(filePath, boundsOpts)
+
+                val origW = boundsOpts.outWidth
+                val origH = boundsOpts.outHeight
+
+                // Image already fits — return original path immediately
+                if (origW <= maxSize && origH <= maxSize) {
+                    activity?.runOnUiThread { pendingResult?.success(filePath) }
+                    return@Thread
+                }
+
+                // ── Step 2: calculate inSampleSize ────────────────────────
+                var sampleSize = 1
+                var halfW = origW / 2
+                var halfH = origH / 2
+                while (halfW / sampleSize >= maxSize && halfH / sampleSize >= maxSize) {
+                    sampleSize *= 2
+                }
+
+                // ── Step 3: decode with inSampleSize (very fast) ──────────
+                val decodeOpts = BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = Bitmap.Config.RGB_565 // 2 bytes/px instead of 4
+                }
+                val sampled = BitmapFactory.decodeFile(filePath, decodeOpts) ?: run {
+                    // Decode failed — fall back to original path
+                    activity?.runOnUiThread { pendingResult?.success(filePath) }
+                    return@Thread
+                }
+
+                // ── Step 4: fine-tune resize if still over maxSize ────────
+                val scale = maxSize.toFloat() / maxOf(sampled.width, sampled.height)
+                val finalBitmap = if (scale < 1f) {
+                    val newW = (sampled.width  * scale).toInt()
+                    val newH = (sampled.height * scale).toInt()
+                    val scaled = Bitmap.createScaledBitmap(sampled, newW, newH, true)
+                    sampled.recycle()
+                    scaled
+                } else {
+                    sampled
+                }
+
+                // ── Step 5: write to cache ────────────────────────────────
+                val outDir  = File(activity!!.cacheDir, "cropper_preview").also { it.mkdirs() }
+                val outFile = File(outDir, "preview_${UUID.randomUUID()}.jpg")
+                temporaryFiles.add(outFile)
+
+                FileOutputStream(outFile).use { out ->
+                    finalBitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                }
+                finalBitmap.recycle()
+
+                activity?.runOnUiThread { pendingResult?.success(outFile.absolutePath) }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "resizeImageForCropper error: ${e.message}")
+                // On any error fall back to the original path so the cropper still works
+                activity?.runOnUiThread { pendingResult?.success(filePath) }
+            }
+        }.start()
     }
 
     private fun clearTemporaryFiles() {

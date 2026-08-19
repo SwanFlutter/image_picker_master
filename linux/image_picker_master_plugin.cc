@@ -55,6 +55,8 @@ static FlMethodResponse* handle_pick_files(FlValue* arguments,
 static FlMethodResponse* handle_capture_photo(FlValue* arguments,
                                               ImagePickerMasterPlugin* self);
 static FlMethodResponse* handle_clear_temporary_files(ImagePickerMasterPlugin* self);
+static FlMethodResponse* handle_resize_image_for_cropper(FlValue* arguments,
+                                                         ImagePickerMasterPlugin* self);
 
 // ─── Method dispatch ───────────────────────────────────────────────────────
 
@@ -74,6 +76,8 @@ static void image_picker_master_plugin_handle_method_call(
     response = handle_capture_photo(arguments, self);
   } else if (strcmp(method, "clearTemporaryFiles") == 0) {
     response = handle_clear_temporary_files(self);
+  } else if (strcmp(method, "resizeImageForCropper") == 0) {
+    response = handle_resize_image_for_cropper(arguments, self);
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
   }
@@ -484,6 +488,93 @@ static std::string get_file_extension(const std::string& file_path) {
   std::string ext = file_path.substr(dot + 1);
   std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
   return ext;
+}
+
+// ─── resizeImageForCropper ─────────────────────────────────────────────────
+// Uses gdk-pixbuf for fast native resize. gdk_pixbuf_scale_simple with
+// GDK_INTERP_BILINEAR is implemented in C and orders of magnitude faster
+// than pure-Dart decode. Result is written to /tmp/cropper_preview/.
+
+static FlMethodResponse* handle_resize_image_for_cropper(
+    FlValue* arguments,
+    ImagePickerMasterPlugin* self) {
+
+  if (fl_value_get_type(arguments) != FL_VALUE_TYPE_MAP) {
+    return create_error_response("INVALID_ARGUMENTS", "Arguments must be a map");
+  }
+
+  FlValue* path_value    = fl_value_lookup_string(arguments, "path");
+  FlValue* maxsize_value = fl_value_lookup_string(arguments, "maxSize");
+
+  if (!path_value || fl_value_get_type(path_value) != FL_VALUE_TYPE_STRING) {
+    return create_error_response("INVALID_ARGUMENTS", "path is required");
+  }
+
+  std::string file_path = fl_value_get_string(path_value);
+  int max_size = 1024;
+  if (maxsize_value && fl_value_get_type(maxsize_value) == FL_VALUE_TYPE_INT) {
+    max_size = static_cast<int>(fl_value_get_int(maxsize_value));
+  }
+
+  // ── Step 1: load source via gdk-pixbuf ────────────────────────────────
+  GError* error = nullptr;
+  GdkPixbuf* src = gdk_pixbuf_new_from_file(file_path.c_str(), &error);
+  if (!src) {
+    if (error) g_error_free(error);
+    // Fallback — return original path so the cropper still works
+    return FL_METHOD_RESPONSE(
+        fl_method_success_response_new(fl_value_new_string(file_path.c_str())));
+  }
+
+  int orig_w = gdk_pixbuf_get_width(src);
+  int orig_h = gdk_pixbuf_get_height(src);
+
+  // Already fits — return original path immediately
+  if (orig_w <= max_size && orig_h <= max_size) {
+    g_object_unref(src);
+    return FL_METHOD_RESPONSE(
+        fl_method_success_response_new(fl_value_new_string(file_path.c_str())));
+  }
+
+  // ── Step 2: compute target size (preserve aspect ratio) ───────────────
+  int larger = std::max(orig_w, orig_h);
+  int new_w  = static_cast<int>(orig_w * static_cast<double>(max_size) / larger);
+  int new_h  = static_cast<int>(orig_h * static_cast<double>(max_size) / larger);
+
+  // ── Step 3: scale with bilinear interpolation (native C, fast) ────────
+  GdkPixbuf* scaled = gdk_pixbuf_scale_simple(
+      src, new_w, new_h, GDK_INTERP_BILINEAR);
+  g_object_unref(src);
+
+  if (!scaled) {
+    return FL_METHOD_RESPONSE(
+        fl_method_success_response_new(fl_value_new_string(file_path.c_str())));
+  }
+
+  // ── Step 4: write to /tmp/cropper_preview/ ────────────────────────────
+  const gchar* tmp_dir = g_get_tmp_dir();
+  g_autofree gchar* out_dir = g_strdup_printf("%s/cropper_preview", tmp_dir);
+  g_mkdir_with_parents(out_dir, 0700);
+
+  g_autofree gchar* out_path = g_strdup_printf(
+      "%s/preview_%" G_GUINT32_FORMAT ".jpg", out_dir, g_random_int());
+
+  g_autofree gchar* quality_str = g_strdup_printf("85");
+  gboolean ok = gdk_pixbuf_save(
+      scaled, out_path, "jpeg", &error, "quality", quality_str, nullptr);
+  g_object_unref(scaled);
+
+  if (!ok || error) {
+    if (error) g_error_free(error);
+    return FL_METHOD_RESPONSE(
+        fl_method_success_response_new(fl_value_new_string(file_path.c_str())));
+  }
+
+  // Track for cleanup
+  self->temporary_files->push_back(std::string(out_path));
+
+  return FL_METHOD_RESPONSE(
+      fl_method_success_response_new(fl_value_new_string(out_path)));
 }
 
 static std::string create_temp_file_path(const std::string& extension) {
