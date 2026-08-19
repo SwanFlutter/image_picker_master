@@ -143,8 +143,7 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
     // Web uses in-memory object URLs — nothing to clean up.
   }
 
-  // ─── resizeImageForCropper ────────────────────────────────────────────────
-  // On web, "path" is an object URL (blob:...). We load it into an <img>,
+  // ─── resizeImageForCropper ──────────────────────────────────────────────── We load it into an <img>,
   // draw it onto a <canvas> at the target size, and export as JPEG.
   // The Canvas 2D API downscale runs in the browser's native C++ compositor,
   // so it is far faster than pure-Dart pixel manipulation.
@@ -218,6 +217,122 @@ class ImagePickerMasterWeb extends ImagePickerMasterPlatform {
       return web.URL.createObjectURL(blob);
     } catch (_) {
       return path;
+    }
+  }
+
+  // ─── cropImageNative ─────────────────────────────────────────────────────
+  // On web, performs crop+encode fully in the browser compositor via Canvas 2D.
+  // format: "jpeg" | "png" | "webp_lossy" | "webp_lossless"
+  // Browser WebP support is near-universal (Chrome/Edge/Firefox/Safari 14+).
+
+  @override
+  Future<String?> cropImageNative({
+    required String path,
+    required double cropX,
+    required double cropY,
+    required double cropW,
+    required double cropH,
+    required double containerW,
+    required double containerH,
+    int rotation = 0,
+    int quality = 85,
+    String format = 'jpeg',
+    int maxSize = 1200,
+  }) async {
+    try {
+      // ── Step 1: load the source blob URL ─────────────────────────────
+      final img = web.document.createElement('img') as web.HTMLImageElement;
+      final loadCompleter = Completer<bool>();
+      img.addEventListener(
+        'load',
+        (web.Event _) {
+          loadCompleter.complete(true);
+        }.toJS,
+      );
+      img.addEventListener(
+        'error',
+        (web.Event _) {
+          loadCompleter.complete(false);
+        }.toJS,
+      );
+      img.src = path;
+      if (!await loadCompleter.future) return null;
+
+      final origW = img.naturalWidth;
+      final origH = img.naturalHeight;
+
+      // ── Step 2: apply rotation to a temp canvas ───────────────────────
+      final rotRad = rotation * 3.141592653589793 / 180.0;
+      final bool swapped = rotation == 90 || rotation == 270;
+      final rotW = swapped ? origH : origW;
+      final rotH = swapped ? origW : origH;
+
+      final rotCanvas =
+          web.document.createElement('canvas') as web.HTMLCanvasElement;
+      rotCanvas.width = rotW;
+      rotCanvas.height = rotH;
+      final rotCtx = rotCanvas.getContext('2d') as web.CanvasRenderingContext2D;
+      rotCtx.translate((rotW / 2).toDouble(), (rotH / 2).toDouble());
+      rotCtx.rotate(rotRad);
+      rotCtx.drawImage(img, (-origW / 2).toDouble(), (-origH / 2).toDouble());
+
+      final imgW = rotW.toDouble();
+      final imgH = rotH.toDouble();
+
+      // ── Step 3: map crop rect from container coords → image coords ────
+      final imgAspect = imgW / imgH;
+      final contAspect = containerW / containerH;
+      final double displayedW, displayedH, offsetX, offsetY;
+      if (imgAspect > contAspect) {
+        displayedW = containerW;
+        displayedH = containerW / imgAspect;
+        offsetX = 0;
+        offsetY = (containerH - displayedH) / 2;
+      } else {
+        displayedH = containerH;
+        displayedW = containerH * imgAspect;
+        offsetX = (containerW - displayedW) / 2;
+        offsetY = 0;
+      }
+      final scaleX = imgW / displayedW;
+      final scaleY = imgH / displayedH;
+      final px = ((cropX - offsetX) * scaleX).clamp(0, imgW - 1);
+      final py = ((cropY - offsetY) * scaleY).clamp(0, imgH - 1);
+      final pw = (cropW * scaleX).clamp(1, imgW - px);
+      final ph = (cropH * scaleY).clamp(1, imgH - py);
+
+      // ── Step 4: draw cropped region onto output canvas ────────────────
+      final outCanvas =
+          web.document.createElement('canvas') as web.HTMLCanvasElement;
+      outCanvas.width = pw.round();
+      outCanvas.height = ph.round();
+      final outCtx = outCanvas.getContext('2d') as web.CanvasRenderingContext2D;
+      outCtx.drawImage(rotCanvas, px, py, pw, ph, 0, 0, pw, ph);
+
+      // ── Step 5: encode to chosen format ──────────────────────────────
+      final String mimeType;
+      switch (format) {
+        case 'png':
+          mimeType = 'image/png';
+          break;
+        case 'webp_lossy':
+        case 'webp_lossless':
+          mimeType = 'image/webp';
+          break;
+        default:
+          mimeType = 'image/jpeg';
+      }
+      final q = quality / 100.0;
+      final dataUrl = outCanvas.toDataURL(mimeType, q.toJS);
+      final base64 = dataUrl.split(',').last;
+      final bytes = _base64ToBytes(base64);
+      final blob = web.Blob(
+        [bytes.toJS].toJS,
+        web.BlobPropertyBag(type: mimeType),
+      );
+      return web.URL.createObjectURL(blob);
+    } catch (_) {
+      return null;
     }
   }
 

@@ -70,18 +70,6 @@ abstract class ImagePickerMasterPlatform extends PlatformInterface {
     throw UnimplementedError('clearTemporaryFiles() has not been implemented.');
   }
 
-  /// Resizes an image natively for use in a cropper UI.
-  ///
-  /// Uses Android's `BitmapFactory.inSampleSize` / platform-native equivalents
-  /// to decode only a fraction of the pixels, making resize ~50–150 ms instead
-  /// of the ~10 s that pure-Dart decode takes on a 2+ MB JPEG.
-  ///
-  /// [path] is the absolute path to the source image file.
-  /// [maxSize] is the maximum width **or** height of the output (default 1024).
-  ///
-  /// Returns the absolute path of the resized image written to the plugin's
-  /// cache directory, or [path] unchanged if the image already fits within
-  /// [maxSize] or if a native error occurred (so the cropper never crashes).
   Future<String?> resizeImageForCropper({
     required String path,
     int maxSize = 1024,
@@ -89,5 +77,37 @@ abstract class ImagePickerMasterPlatform extends PlatformInterface {
     throw UnimplementedError(
       'resizeImageForCropper() has not been implemented.',
     );
+  }
+
+  /// Crops an image natively without going through a Dart isolate.
+  ///
+  /// Uses Android's `BitmapFactory.inSampleSize` / platform-native equivalents
+  /// to decode only a fraction of the pixels, making resize ~50–150 ms instead
+  /// of the ~10 s that pure-Dart decode takes on a 2+ MB JPEG.
+  ///
+  /// [path] absolute path (or object URL on web) of the source image.
+  /// [cropX]/[cropY] top-left of the crop rect in container coordinates.
+  /// [cropW]/[cropH] size of the crop rect in container coordinates.
+  /// [containerW]/[containerH] size of the Flutter widget that displayed the image.
+  /// [rotation] clockwise degrees applied before cropping (0, 90, 180, 270).
+  /// [quality] JPEG/WebP encode quality 0–100 (default 85, ignored for PNG).
+  /// [format] output format: `"jpeg"` | `"png"` | `"webp_lossy"` | `"webp_lossless"`.
+  /// [maxSize] max edge length used when decoding the source (default 1200).
+  ///
+  /// Returns the absolute path of the cropped file, or `null` on failure.
+  Future<String?> cropImageNative({
+    required String path,
+    required double cropX,
+    required double cropY,
+    required double cropW,
+    required double cropH,
+    required double containerW,
+    required double containerH,
+    int rotation = 0,
+    int quality = 85,
+    String format = 'jpeg',
+    int maxSize = 1200,
+  }) {
+    throw UnimplementedError('cropImageNative() has not been implemented.');
   }
 }

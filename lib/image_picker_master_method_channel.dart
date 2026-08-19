@@ -91,4 +91,37 @@ class MethodChannelImagePickerMaster extends ImagePickerMasterPlatform {
       return path;
     }
   }
+
+  @override
+  Future<String?> cropImageNative({
+    required String path,
+    required double cropX,
+    required double cropY,
+    required double cropW,
+    required double cropH,
+    required double containerW,
+    required double containerH,
+    int rotation = 0,
+    int quality = 85,
+    String format = 'jpeg',
+    int maxSize = 1200,
+  }) async {
+    try {
+      return await methodChannel.invokeMethod<String>('cropImageNative', {
+        'path': path,
+        'cropX': cropX,
+        'cropY': cropY,
+        'cropW': cropW,
+        'cropH': cropH,
+        'containerW': containerW,
+        'containerH': containerH,
+        'rotation': rotation,
+        'quality': quality,
+        'format': format,
+        'maxSize': maxSize,
+      });
+    } on PlatformException {
+      return null;
+    }
+  }
 }

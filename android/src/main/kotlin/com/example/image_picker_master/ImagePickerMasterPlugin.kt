@@ -130,6 +130,13 @@ class ImagePickerMasterPlugin :
                 }
                 resizeImageForCropper(arguments)
             }
+            "cropImageNative" -> {
+                val arguments = call.arguments as? Map<*, *> ?: run {
+                    pendingResult?.error("INVALID_ARGUMENTS", "Arguments must be a map", null)
+                    return
+                }
+                cropImageNative(arguments)
+            }
             else -> {
                 pendingResult?.notImplemented()
             }
@@ -500,6 +507,129 @@ class ImagePickerMasterPlugin :
         temporaryFiles.clear()
     }
 
+    // ─── cropImageNative ───────────────────────────────────────────────────
+    // Full native crop+encode pipeline. Replaces the Dart compute() isolate.
+    // Runs on a background Thread — never blocks the UI.
+    //
+    // Arguments:
+    //   path        : String  — absolute path to source image
+    //   cropX/Y     : Double  — top-left of crop rect in container coordinates
+    //   cropW/H     : Double  — size of crop rect in container coordinates
+    //   containerW/H: Double  — displayed container size (matches Flutter widget)
+    //   rotation    : Int     — clockwise degrees (0, 90, 180, 270)
+    //   quality     : Int     — 0-100 (default 85, ignored for PNG)
+    //   format      : String  — "jpeg" | "png" | "webp_lossy" | "webp_lossless"
+    //   maxSize     : Int     — max decode edge in px (default 1200)
+
+    @Suppress("NAME_SHADOWING")
+    private fun cropImageNative(arguments: Map<*, *>) {
+        val srcPath    = arguments["path"]       as? String  ?: run { pendingResult?.error("INVALID_ARGUMENTS", "path required", null); return }
+        val cropX      = (arguments["cropX"]      as? Number)?.toFloat() ?: 0f
+        val cropY      = (arguments["cropY"]      as? Number)?.toFloat() ?: 0f
+        val cropW      = (arguments["cropW"]      as? Number)?.toFloat() ?: 1f
+        val cropH      = (arguments["cropH"]      as? Number)?.toFloat() ?: 1f
+        val containerW = (arguments["containerW"] as? Number)?.toFloat() ?: 1f
+        val containerH = (arguments["containerH"] as? Number)?.toFloat() ?: 1f
+        val rotation   = arguments["rotation"]    as? Int    ?: 0
+        val quality    = arguments["quality"]     as? Int    ?: 85
+        val formatStr  = (arguments["format"]     as? String ?: "jpeg").lowercase()
+        val maxSize    = arguments["maxSize"]      as? Int   ?: 1200
+
+        val outputFormat = when (formatStr) {
+            "png"             -> OutputFormat.PNG
+            "webp_lossy"      -> OutputFormat.WEBP_LOSSY
+            "webp_lossless"   -> OutputFormat.WEBP_LOSSLESS
+            else              -> OutputFormat.JPEG
+        }
+
+        Thread {
+            try {
+                // ── Step 1: read dimensions only ─────────────────────────
+                val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(srcPath, boundsOpts)
+                val origW = boundsOpts.outWidth
+                val origH = boundsOpts.outHeight
+
+                // ── Step 2: inSampleSize — stay near maxSize ──────────────
+                var sampleSize = 1
+                var hw = origW / 2; var hh = origH / 2
+                while (hw / sampleSize >= maxSize && hh / sampleSize >= maxSize) sampleSize *= 2
+
+                val config = if (outputFormat == OutputFormat.PNG ||
+                                 outputFormat == OutputFormat.WEBP_LOSSLESS)
+                    Bitmap.Config.ARGB_8888 else Bitmap.Config.RGB_565
+                val decodeOpts = BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize; inPreferredConfig = config
+                }
+                var bmp = BitmapFactory.decodeFile(srcPath, decodeOpts)
+                    ?: run { activity?.runOnUiThread { pendingResult?.error("DECODE_FAILED", "Cannot decode image", null) }; return@Thread }
+
+                // ── Step 3: rotation ──────────────────────────────────────
+                if (rotation != 0) {
+                    val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
+                    val rotated = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
+                    bmp.recycle(); bmp = rotated
+                }
+
+                // ── Step 4: map crop rect from container coords → pixel coords
+                val imgAspect  = bmp.width.toFloat() / bmp.height.toFloat()
+                val contAspect = containerW / containerH
+                val displayedW: Float; val displayedH: Float
+                val offsetX: Float;    val offsetY: Float
+                if (imgAspect > contAspect) {
+                    displayedW = containerW; displayedH = containerW / imgAspect
+                    offsetX = 0f;            offsetY = (containerH - displayedH) / 2f
+                } else {
+                    displayedH = containerH; displayedW = containerH * imgAspect
+                    offsetX = (containerW - displayedW) / 2f; offsetY = 0f
+                }
+                val scaleX = bmp.width  / displayedW
+                val scaleY = bmp.height / displayedH
+                val sx = ((cropX - offsetX) * scaleX).toInt().coerceIn(0, bmp.width  - 1)
+                val sy = ((cropY - offsetY) * scaleY).toInt().coerceIn(0, bmp.height - 1)
+                val sw = (cropW * scaleX).toInt().coerceIn(1, bmp.width  - sx)
+                val sh = (cropH * scaleY).toInt().coerceIn(1, bmp.height - sy)
+
+                // ── Step 5: crop ──────────────────────────────────────────
+                val cropped = Bitmap.createBitmap(bmp, sx, sy, sw, sh)
+                bmp.recycle()
+
+                // ── Step 6: encode to chosen format ───────────────────────
+                val ext = when (outputFormat) {
+                    OutputFormat.PNG                               -> "png"
+                    OutputFormat.WEBP_LOSSY, OutputFormat.WEBP_LOSSLESS -> "webp"
+                    else                                          -> "jpg"
+                }
+                val outDir  = File(activity!!.cacheDir, "cropper_output").also { it.mkdirs() }
+                val outFile = File(outDir, "crop_${UUID.randomUUID()}.$ext")
+                temporaryFiles.add(outFile)
+
+                FileOutputStream(outFile).use { fos ->
+                    val compressFormat = when (outputFormat) {
+                        OutputFormat.PNG           -> Bitmap.CompressFormat.PNG
+                        OutputFormat.WEBP_LOSSY    ->
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R)
+                                Bitmap.CompressFormat.WEBP_LOSSY
+                            else @Suppress("DEPRECATION") Bitmap.CompressFormat.WEBP
+                        OutputFormat.WEBP_LOSSLESS ->
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R)
+                                Bitmap.CompressFormat.WEBP_LOSSLESS
+                            else @Suppress("DEPRECATION") Bitmap.CompressFormat.WEBP
+                        else                       -> Bitmap.CompressFormat.JPEG
+                    }
+                    cropped.compress(compressFormat, quality, fos)
+                }
+                cropped.recycle()
+
+                activity?.runOnUiThread { pendingResult?.success(outFile.absolutePath) }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "cropImageNative error: ${e.message}")
+                activity?.runOnUiThread { pendingResult?.error("CROP_FAILED", e.message, null) }
+            }
+        }.start()
+    }
+
     // ─── ActivityAware ─────────────────────────────────────────────────────
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -578,3 +708,7 @@ class ImagePickerMasterPlugin :
         "application/octet-stream"
     )
 }
+
+// ─── Extension: output format enum ────────────────────────────────────────
+// Mirrors the Dart CropOutputFormat enum sent as a String argument.
+private enum class OutputFormat { JPEG, PNG, WEBP_LOSSY, WEBP_LOSSLESS }

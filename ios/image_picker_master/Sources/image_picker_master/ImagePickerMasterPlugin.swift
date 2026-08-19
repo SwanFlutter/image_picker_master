@@ -98,6 +98,14 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
             }
             resizeImageForCropper(arguments: args, result: result)
 
+        case "cropImageNative":
+            guard let args = call.arguments as? [String: Any] else {
+                result(FlutterError(code: "INVALID_ARGUMENTS",
+                                    message: "Arguments must be a map", details: nil))
+                return
+            }
+            cropImageNative(arguments: args, result: result)
+
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -581,10 +589,131 @@ public class ImagePickerMasterPlugin: NSObject, FlutterPlugin {
         }
     }
 
+    // ─── cropImageNative ──────────────────────────────────────────────────
+    // Full native crop+encode pipeline on a background queue.
+    // format: "jpeg" | "png" | "webp_lossy" | "webp_lossless"
+    // iOS has no built-in WebP encoder — webp_* formats fall back to JPEG.
+
+    private func cropImageNative(arguments: [String: Any],
+                                  result: @escaping FlutterResult) {
+        guard let filePath = arguments["path"] as? String else {
+            result(FlutterError(code: "INVALID_ARGUMENTS",
+                                message: "path is required", details: nil))
+            return
+        }
+        let cropX      = (arguments["cropX"]      as? Double) ?? 0
+        let cropY      = (arguments["cropY"]      as? Double) ?? 0
+        let cropW      = (arguments["cropW"]      as? Double) ?? 1
+        let cropH      = (arguments["cropH"]      as? Double) ?? 1
+        let containerW = (arguments["containerW"] as? Double) ?? 1
+        let containerH = (arguments["containerH"] as? Double) ?? 1
+        let rotation   = (arguments["rotation"]   as? Int)    ?? 0
+        let quality    = (arguments["quality"]    as? Int)    ?? 85
+        let format     = (arguments["format"]     as? String  ?? "jpeg").lowercased()
+        let maxSize    = (arguments["maxSize"]    as? Int)    ?? 1200
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let fileURL = URL(fileURLWithPath: filePath)
+
+            // ── Step 1: fast thumbnail decode at maxSize via ImageIO ──────
+            guard let imageSource = CGImageSourceCreateWithURL(fileURL as CFURL, nil) else {
+                DispatchQueue.main.async { result(nil) }; return
+            }
+            let thumbOpts: [CFString: Any] = [
+                kCGImageSourceThumbnailMaxPixelSize: maxSize,
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: false,
+                kCGImageSourceShouldCacheImmediately: false
+            ]
+            guard let cgSrc = CGImageSourceCreateThumbnailAtIndex(
+                imageSource, 0, thumbOpts as CFDictionary) else {
+                DispatchQueue.main.async { result(nil) }; return
+            }
+
+            // ── Step 2: apply rotation ────────────────────────────────────
+            var uiSrc = UIImage(cgImage: cgSrc)
+            if rotation != 0 {
+                let radians = CGFloat(rotation) * .pi / 180
+                let renderer = UIGraphicsImageRenderer(size: uiSrc.size)
+                uiSrc = renderer.image { ctx in
+                    ctx.cgContext.translateBy(x: uiSrc.size.width / 2,
+                                              y: uiSrc.size.height / 2)
+                    ctx.cgContext.rotate(by: radians)
+                    uiSrc.draw(in: CGRect(x: -uiSrc.size.width / 2,
+                                          y: -uiSrc.size.height / 2,
+                                          width:  uiSrc.size.width,
+                                          height: uiSrc.size.height))
+                }
+            }
+
+            let imgW = Double(uiSrc.size.width)
+            let imgH = Double(uiSrc.size.height)
+
+            // ── Step 3: map crop rect from container coords → pixel coords ─
+            let imgAspect  = imgW / imgH
+            let contAspect = containerW / containerH
+            let displayedW: Double; let displayedH: Double
+            let offsetX: Double;    let offsetY: Double
+            if imgAspect > contAspect {
+                displayedW = containerW;  displayedH = containerW / imgAspect
+                offsetX = 0;              offsetY = (containerH - displayedH) / 2
+            } else {
+                displayedH = containerH;  displayedW = containerH * imgAspect
+                offsetX = (containerW - displayedW) / 2; offsetY = 0
+            }
+            let scaleX = imgW / displayedW
+            let scaleY = imgH / displayedH
+            let px = max(0, (cropX - offsetX) * scaleX)
+            let py = max(0, (cropY - offsetY) * scaleY)
+            let pw = min(cropW * scaleX, imgW - px)
+            let ph = min(cropH * scaleY, imgH - py)
+
+            guard pw > 0, ph > 0,
+                  let cgFull = uiSrc.cgImage else {
+                DispatchQueue.main.async { result(nil) }; return
+            }
+
+            // ── Step 4: crop ──────────────────────────────────────────────
+            guard let cgCropped = cgFull.cropping(
+                to: CGRect(x: px, y: py, width: pw, height: ph)) else {
+                DispatchQueue.main.async { result(nil) }; return
+            }
+            let cropped = UIImage(cgImage: cgCropped)
+
+            // ── Step 5: encode ────────────────────────────────────────────
+            let q = CGFloat(quality) / 100.0
+            let data: Data?
+            let ext: String
+            switch format {
+            case "png":
+                data = cropped.pngData(); ext = "png"
+            default: // jpeg | webp_lossy | webp_lossless → JPEG (no native WebP encoder on iOS)
+                data = cropped.jpegData(compressionQuality: q); ext = "jpg"
+            }
+            guard let encoded = data else {
+                DispatchQueue.main.async { result(nil) }; return
+            }
+
+            // ── Step 6: write to cache ────────────────────────────────────
+            let outDir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("cropper_output")
+            do {
+                try FileManager.default.createDirectory(
+                    at: outDir, withIntermediateDirectories: true)
+                let outURL = outDir.appendingPathComponent(
+                    "crop_\(UUID().uuidString).\(ext)")
+                try encoded.write(to: outURL)
+                self.allTemporaryFiles.append(outURL)
+                DispatchQueue.main.async { result(outURL.path) }
+            } catch {
+                DispatchQueue.main.async { result(nil) }
+            }
+        }
+    }
+
     // ─── Document UTType lists ────────────────────────────────────────────
 
-    @available(iOS 14.0, *)
-    private func documentUTTypes() -> [UTType] {
+    @available(iOS 14.0, *)    private func documentUTTypes() -> [UTType] {
         var types: [UTType] = [.pdf, .text, .plainText, .html, .json, .xml,
                                .zip, .gzip, .javascript,
                                .image, .jpeg, .png, .gif, .bmp, .tiff, .heic, .heif,

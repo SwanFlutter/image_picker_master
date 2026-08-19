@@ -1,6 +1,11 @@
 #ifndef FLUTTER_PLUGIN_IMAGE_PICKER_MASTER_PLUGIN_H_
 #define FLUTTER_PLUGIN_IMAGE_PICKER_MASTER_PLUGIN_H_
 
+// Prevent Windows.h from defining min/max macros that conflict with std::max/std::min
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
@@ -8,6 +13,8 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <mutex>
+#include <functional>
 #include <windows.h>
 #include <shobjidl.h>
 #include <versionhelpers.h>
@@ -66,8 +73,20 @@ namespace image_picker_master {
         // Camera error tracking
         std::string last_camera_error_;
 
-        // Temporary files for cleanup
+        // Temporary files for cleanup — protected by temp_files_mutex_
+        std::mutex               temp_files_mutex_;
         std::vector<std::string> temporary_files_;
+
+        // Platform-thread dispatch via hidden message-only window.
+        // Flutter Windows SDK does not expose a public TaskRunner; we use
+        // PostMessage to a HWND_MESSAGE window to marshal callbacks safely.
+        HWND     dispatch_hwnd_  = nullptr;
+        std::mutex               pending_mutex_;
+        std::vector<std::function<void()>> pending_callbacks_;
+
+        // Post a callback to be executed on the platform (UI) thread.
+        // Safe to call from any thread.
+        void PostToMainThread(std::function<void()> fn);
 
         // Method implementations
         void PickFiles(
@@ -79,6 +98,10 @@ namespace image_picker_master {
                 std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 
         void ResizeImageForCropper(
+                const flutter::EncodableMap& arguments,
+                std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+        void CropImageNative(
                 const flutter::EncodableMap& arguments,
                 std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 

@@ -36,6 +36,23 @@ class MockImagePickerMasterPlatform
   }) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<String?> cropImageNative({
+    required String path,
+    required double cropX,
+    required double cropY,
+    required double cropW,
+    required double cropH,
+    required double containerW,
+    required double containerH,
+    int rotation = 0,
+    int quality = 85,
+    String format = 'jpeg',
+    int maxSize = 1200,
+  }) {
+    throw UnimplementedError();
+  }
 }
 
 void main() {

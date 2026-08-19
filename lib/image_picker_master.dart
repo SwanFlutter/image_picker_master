@@ -421,4 +421,64 @@ class ImagePickerMaster {
       maxSize: maxSize,
     );
   }
+
+  /// Crops an image natively without going through a Dart isolate.
+  ///
+  /// All decode → rotate → crop → encode work runs on a native background
+  /// thread (~115 ms on a 2 MB JPEG vs ~3,700 ms with a Dart `compute()` call).
+  ///
+  /// [path] absolute path (or object URL on web) of the source image.
+  /// [cropX]/[cropY] top-left of the crop rect in container coordinates.
+  /// [cropW]/[cropH] size of the crop rect in container coordinates.
+  /// [containerW]/[containerH] size of the Flutter widget that displayed the image.
+  /// [rotation] clockwise degrees applied before cropping (0, 90, 180, 270).
+  /// [quality] JPEG/WebP encode quality 0–100 (default 85, ignored for PNG).
+  /// [format] output format:
+  ///   - `"jpeg"` — smallest file, lossy (default)
+  ///   - `"png"` — lossless, larger file
+  ///   - `"webp_lossy"` — better compression than JPEG, lossy
+  ///   - `"webp_lossless"` — lossless WebP
+  /// [maxSize] max edge length used when decoding the source (default 1200).
+  ///
+  /// Returns the absolute path of the cropped file, or `null` on failure.
+  ///
+  /// Example:
+  /// ```dart
+  /// final croppedPath = await ImagePickerMaster.instance.cropImageNative(
+  ///   path: pickedFile.path,
+  ///   cropX: cropRect.left,   cropY: cropRect.top,
+  ///   cropW: cropRect.width,  cropH: cropRect.height,
+  ///   containerW: containerSize.width,
+  ///   containerH: containerSize.height,
+  ///   format: 'webp_lossy',
+  ///   quality: 85,
+  /// );
+  /// ```
+  Future<String?> cropImageNative({
+    required String path,
+    required double cropX,
+    required double cropY,
+    required double cropW,
+    required double cropH,
+    required double containerW,
+    required double containerH,
+    int rotation = 0,
+    int quality = 85,
+    String format = 'jpeg',
+    int maxSize = 1200,
+  }) {
+    return ImagePickerMasterPlatform.instance.cropImageNative(
+      path: path,
+      cropX: cropX,
+      cropY: cropY,
+      cropW: cropW,
+      cropH: cropH,
+      containerW: containerW,
+      containerH: containerH,
+      rotation: rotation,
+      quality: quality,
+      format: format,
+      maxSize: maxSize,
+    );
+  }
 }

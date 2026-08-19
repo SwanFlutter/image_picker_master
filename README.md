@@ -49,7 +49,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  image_picker_master: ^0.0.9
+  image_picker_master: ^0.1.0
 
 Then run:
 
@@ -290,6 +290,55 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
 }
 ```
 
+### 8. `resizeImageForCropper()` — Fast native preview
+
+Resize a picked image for use as a cropper preview. Uses platform-native decoders
+(`BitmapFactory.inSampleSize` on Android, `CGImageSourceCreateThumbnailAtIndex` on
+iOS/macOS, GDI+ on Windows, gdk-pixbuf on Linux, Canvas 2D on Web) — ~50–150 ms
+vs ~10 s for pure-Dart decode on a 2 MB JPEG.
+
+```dart
+final previewPath = await ImagePickerMaster.instance.resizeImageForCropper(
+  path: pickedFile.path,
+  maxSize: 1024,   // max edge length in pixels (default 1024)
+);
+// previewPath is never null — falls back to original path on error
+```
+
+### 9. `cropImageNative()` — Native crop + encode (~115 ms)
+
+Performs the full decode → rotate → crop → encode pipeline natively on a background
+thread. Replaces a Dart `compute()` isolate that typically takes ~3,700 ms.
+
+```dart
+final croppedPath = await ImagePickerMaster.instance.cropImageNative(
+  path: pickedFile.path,          // source image path / blob URL
+  cropX: cropRect.left,           // crop rect in container coordinates
+  cropY: cropRect.top,
+  cropW: cropRect.width,
+  cropH: cropRect.height,
+  containerW: containerSize.width,   // Flutter widget size that displayed the image
+  containerH: containerSize.height,
+  rotation: 90,                   // clockwise degrees (0, 90, 180, 270)
+  quality: 85,                    // 0-100, ignored for PNG
+  format: 'webp_lossy',           // "jpeg" | "png" | "webp_lossy" | "webp_lossless"
+  maxSize: 1200,                  // max decode edge before crop (default 1200)
+);
+
+if (croppedPath != null) {
+  // Use File(croppedPath) on mobile/desktop or load as blob URL on web
+}
+```
+
+**Output format support by platform:**
+
+| Format | Android | iOS | macOS | Windows | Linux | Web |
+|--------|:-------:|:---:|:-----:|:-------:|:-----:|:---:|
+| `jpeg` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `png` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `webp_lossy` | ✅ (API 30+ native, older→WEBP) | JPEG fallback | JPEG fallback | JPEG fallback | JPEG fallback | ✅ |
+| `webp_lossless` | ✅ (API 30+ native, older→WEBP) | JPEG fallback | JPEG fallback | JPEG fallback | JPEG fallback | ✅ |
+
 ---
 
 ## PickedFile Object
@@ -354,6 +403,7 @@ bool isAudio = file.mimeType?.startsWith('audio/') ?? false;
 | `capturePhoto({...})` | `Future<PickedFile?>` | Capture photo from camera |
 | `clearTemporaryFiles()` | `Future<void>` | Delete all plugin temp files |
 | `resizeImageForCropper({required path, maxSize})` | `Future<String?>` | Native resize for cropper preview (~50–150 ms vs ~10 s in Dart) |
+| `cropImageNative({required path, cropX, cropY, cropW, cropH, containerW, containerH, ...})` | `Future<String?>` | Full native crop+encode (~115 ms vs ~3,700 ms Dart isolate) |
 
 ### `pickFiles` Parameters
 
@@ -378,6 +428,22 @@ enum FileType {
   custom,    // Filtered by allowedExtensions list
 }
 ```
+
+### `cropImageNative` Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `path` | `String` | required | Absolute path or blob URL of the source image |
+| `cropX` | `double` | required | Left edge of the crop rect in container coordinates |
+| `cropY` | `double` | required | Top edge of the crop rect in container coordinates |
+| `cropW` | `double` | required | Width of the crop rect in container coordinates |
+| `cropH` | `double` | required | Height of the crop rect in container coordinates |
+| `containerW` | `double` | required | Width of the Flutter widget that displayed the image |
+| `containerH` | `double` | required | Height of the Flutter widget that displayed the image |
+| `rotation` | `int` | `0` | Clockwise rotation in degrees: 0, 90, 180, or 270 |
+| `quality` | `int` | `85` | Encode quality 0–100 (ignored for PNG) |
+| `format` | `String` | `"jpeg"` | Output format: `"jpeg"` \| `"png"` \| `"webp_lossy"` \| `"webp_lossless"` |
+| `maxSize` | `int` | `1200` | Max edge length when decoding source image (prevents OOM on huge files) |
 
 ---
 

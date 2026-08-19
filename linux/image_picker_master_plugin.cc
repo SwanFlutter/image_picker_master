@@ -57,6 +57,8 @@ static FlMethodResponse* handle_capture_photo(FlValue* arguments,
 static FlMethodResponse* handle_clear_temporary_files(ImagePickerMasterPlugin* self);
 static FlMethodResponse* handle_resize_image_for_cropper(FlValue* arguments,
                                                          ImagePickerMasterPlugin* self);
+static FlMethodResponse* handle_crop_image_native(FlValue* arguments,
+                                                   ImagePickerMasterPlugin* self);
 
 // ─── Method dispatch ───────────────────────────────────────────────────────
 
@@ -78,6 +80,8 @@ static void image_picker_master_plugin_handle_method_call(
     response = handle_clear_temporary_files(self);
   } else if (strcmp(method, "resizeImageForCropper") == 0) {
     response = handle_resize_image_for_cropper(arguments, self);
+  } else if (strcmp(method, "cropImageNative") == 0) {
+    response = handle_crop_image_native(arguments, self);
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
   }
@@ -573,6 +577,137 @@ static FlMethodResponse* handle_resize_image_for_cropper(
   // Track for cleanup
   self->temporary_files->push_back(std::string(out_path));
 
+  return FL_METHOD_RESPONSE(
+      fl_method_success_response_new(fl_value_new_string(out_path)));
+}
+
+// ─── cropImageNative ──────────────────────────────────────────────────────
+// Full native crop+encode using gdk-pixbuf.
+// format: "jpeg" | "png" | "webp_lossy" | "webp_lossless"
+// gdk-pixbuf has no WebP saver — webp_* fall back to JPEG.
+
+static FlMethodResponse* handle_crop_image_native(FlValue* arguments,
+                                                   ImagePickerMasterPlugin* self) {
+  if (fl_value_get_type(arguments) != FL_VALUE_TYPE_MAP) {
+    return create_error_response("INVALID_ARGUMENTS", "Arguments must be a map");
+  }
+
+  auto get_str = [&](const char* key, std::string def = "") -> std::string {
+    FlValue* v = fl_value_lookup_string(arguments, key);
+    if (v && fl_value_get_type(v) == FL_VALUE_TYPE_STRING) return fl_value_get_string(v);
+    return def;
+  };
+  auto get_dbl = [&](const char* key, double def = 0.0) -> double {
+    FlValue* v = fl_value_lookup_string(arguments, key);
+    if (!v) return def;
+    if (fl_value_get_type(v) == FL_VALUE_TYPE_FLOAT) return fl_value_get_float(v);
+    if (fl_value_get_type(v) == FL_VALUE_TYPE_INT)   return static_cast<double>(fl_value_get_int(v));
+    return def;
+  };
+  auto get_int = [&](const char* key, int def = 0) -> int {
+    FlValue* v = fl_value_lookup_string(arguments, key);
+    if (v && fl_value_get_type(v) == FL_VALUE_TYPE_INT) return static_cast<int>(fl_value_get_int(v));
+    return def;
+  };
+
+  std::string file_path = get_str("path");
+  if (file_path.empty())
+    return create_error_response("INVALID_ARGUMENTS", "path is required");
+
+  std::string format   = get_str("format", "jpeg");
+  double crop_x        = get_dbl("cropX");
+  double crop_y        = get_dbl("cropY");
+  double crop_w        = get_dbl("cropW",  1);
+  double crop_h        = get_dbl("cropH",  1);
+  double container_w   = get_dbl("containerW", 1);
+  double container_h   = get_dbl("containerH", 1);
+  int    rotation      = get_int("rotation");
+  int    quality       = get_int("quality", 85);
+  int    max_size      = get_int("maxSize",  1200);
+
+  // ── Step 1: load source ──────────────────────────────────────────────
+  GError* err = nullptr;
+  GdkPixbuf* src = gdk_pixbuf_new_from_file(file_path.c_str(), &err);
+  if (!src) {
+    if (err) g_error_free(err);
+    return create_error_response("DECODE_FAILED", "Cannot decode image");
+  }
+
+  int origW = gdk_pixbuf_get_width(src);
+  int origH = gdk_pixbuf_get_height(src);
+
+  // ── Step 2: downscale to maxSize ────────────────────────────────────
+  int larger = std::max(origW, origH);
+  if (larger > max_size) {
+    double scale = static_cast<double>(max_size) / larger;
+    int nw = static_cast<int>(origW * scale);
+    int nh = static_cast<int>(origH * scale);
+    GdkPixbuf* scaled = gdk_pixbuf_scale_simple(src, nw, nh, GDK_INTERP_BILINEAR);
+    g_object_unref(src);
+    src   = scaled;
+    origW = nw; origH = nh;
+  }
+
+  // ── Step 3: rotation ────────────────────────────────────────────────
+  if (rotation != 0) {
+    GdkPixbufRotation rot = GDK_PIXBUF_ROTATE_NONE;
+    if (rotation == 90)  rot = GDK_PIXBUF_ROTATE_COUNTERCLOCKWISE; // gdk is CCW
+    if (rotation == 180) rot = GDK_PIXBUF_ROTATE_UPSIDEDOWN;
+    if (rotation == 270) rot = GDK_PIXBUF_ROTATE_CLOCKWISE;
+    GdkPixbuf* rotated = gdk_pixbuf_rotate_simple(src, rot);
+    g_object_unref(src);
+    src   = rotated;
+    origW = gdk_pixbuf_get_width(src);
+    origH = gdk_pixbuf_get_height(src);
+  }
+
+  // ── Step 4: map crop rect → pixel coords ────────────────────────────
+  double img_a = static_cast<double>(origW) / origH;
+  double con_a = container_w / container_h;
+  double dw, dh, ox, oy;
+  if (img_a > con_a) { dw = container_w; dh = dw / img_a; ox = 0; oy = (container_h - dh) / 2; }
+  else               { dh = container_h; dw = dh * img_a; oy = 0; ox = (container_w - dw) / 2; }
+  int sx = static_cast<int>((crop_x - ox) * origW / dw);
+  int sy = static_cast<int>((crop_y - oy) * origH / dh);
+  int sw = static_cast<int>( crop_w       * origW / dw);
+  int sh = static_cast<int>( crop_h       * origH / dh);
+  sx = std::max(0, std::min(sx, origW - 1));
+  sy = std::max(0, std::min(sy, origH - 1));
+  sw = std::max(1, std::min(sw, origW - sx));
+  sh = std::max(1, std::min(sh, origH - sy));
+
+  // ── Step 5: crop ────────────────────────────────────────────────────
+  GdkPixbuf* cropped = gdk_pixbuf_new_subpixbuf(src, sx, sy, sw, sh);
+  g_object_unref(src);
+  if (!cropped)
+    return create_error_response("CROP_FAILED", "Subpixbuf failed");
+
+  // ── Step 6: encode ───────────────────────────────────────────────────
+  bool use_png = (format == "png");
+  const gchar* saver = use_png ? "png" : "jpeg";
+  std::string ext    = use_png ? "png" : "jpg";
+
+  const gchar* tmp_dir = g_get_tmp_dir();
+  g_autofree gchar* out_dir = g_strdup_printf("%s/cropper_output", tmp_dir);
+  g_mkdir_with_parents(out_dir, 0700);
+  g_autofree gchar* out_path = g_strdup_printf(
+      "%s/crop_%" G_GUINT32_FORMAT ".%s", out_dir, g_random_int(), ext.c_str());
+
+  gboolean ok;
+  if (use_png) {
+    ok = gdk_pixbuf_save(cropped, out_path, saver, &err, nullptr);
+  } else {
+    g_autofree gchar* q_str = g_strdup_printf("%d", quality);
+    ok = gdk_pixbuf_save(cropped, out_path, saver, &err, "quality", q_str, nullptr);
+  }
+  g_object_unref(cropped);
+
+  if (!ok || err) {
+    if (err) g_error_free(err);
+    return create_error_response("ENCODE_FAILED", "Failed to save cropped image");
+  }
+
+  self->temporary_files->push_back(std::string(out_path));
   return FL_METHOD_RESPONSE(
       fl_method_success_response_new(fl_value_new_string(out_path)));
 }

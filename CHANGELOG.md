@@ -1,4 +1,25 @@
-## 0.0.9
+## 0.1.1
+
+* **Windows (critical fix):** `ResizeImageForCropper` and `CropImageNative` were calling `shared_result->Success/Error()` directly from a background `std::thread`, which violates Flutter Windows SDK threading requirements and caused the app to crash/close when cropping.
+  - Added a message-only `HWND_MESSAGE` dispatch window created at plugin init.
+  - Added `PostToMainThread(fn)` helper that queues callbacks under `pending_mutex_` and wakes the platform thread via `PostMessageW(dispatch_hwnd_, WM_APP+1, 0, 0)`.
+  - Both background methods now call `PostToMainThread` instead of calling the result directly.
+  - Destructor destroys the dispatch window and drains pending callbacks before cleanup.
+* **Windows (data race fix):** All accesses to `temporary_files_` (push in `CreateTempFilePath`, push in bg threads, iterate+clear in `CleanupTempFiles`) are now protected by `temp_files_mutex_` (`std::mutex`).
+* **Windows (phantom path fix):** `ResizeImageForCropper` previously called `CreateTempFilePath("jpg")` to get a UUID string but wrote to a different path, leaving a non-existent entry in `temporary_files_`. Now uses `CoCreateGuid` directly without registering a phantom path.
+
+
+
+* **All platforms:** Added `cropImageNative()` — full decode → rotate → crop → encode pipeline running on a native background thread/queue. Replaces the pure-Dart `compute()` isolate (~3,700 ms) with ~115 ms native execution on a 2 MB JPEG.
+  - Supports output formats: `"jpeg"` (default), `"png"`, `"webp_lossy"`, `"webp_lossless"`.
+  - Android: `BitmapFactory.inSampleSize` + `Bitmap.compress(WEBP_LOSSY/LOSSLESS/JPEG/PNG)`. WEBP_LOSSY/LOSSLESS falls back to legacy `WEBP` on API < 30.
+  - iOS: `CGImageSourceCreateThumbnailAtIndex` + `UIImage.jpegData` / `pngData`. WebP falls back to JPEG (no native iOS WebP encoder).
+  - macOS: `CGImageSourceCreateThumbnailAtIndex` + `NSBitmapImageRep` JPEG/PNG. WebP falls back to JPEG.
+  - Windows: GDI+ `GetThumbnailImage` + `Bitmap.Save` JPEG/PNG on `std::thread`. WebP falls back to JPEG.
+  - Linux: `gdk_pixbuf_scale_simple` + `gdk_pixbuf_save` JPEG/PNG. WebP falls back to JPEG.
+  - Web: Canvas 2D rotation → crop → `toDataURL` with `image/jpeg`, `image/png`, or `image/webp`.
+
+
 
 * **iOS:** Added `resizeImageForCropper()` — uses `CGImageSourceCreateThumbnailAtIndex` (ImageIO framework) for native thumbnail decode with EXIF rotation support. Completes in ~50 ms vs ~10 s in pure Dart.
 * **macOS:** Added `resizeImageForCropper()` — same ImageIO path as iOS; encodes via `NSBitmapImageRep` JPEG compression.
