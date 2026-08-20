@@ -1,4 +1,8 @@
-## 0.1.1
+## 0.1.2
+
+* **Android (Windows fix):** Disabled Kotlin incremental compilation in the plugin's `build.gradle.kts`. Kotlin's incremental compiler uses `File.relativeTo()` to store source paths in its cache. On Windows, when the Pub Cache (`C:\Users\...\AppData\Local\Pub\Cache\`) and the Flutter project are on **different drives** (e.g. `G:\`), `relativeTo()` throws `IllegalArgumentException: this and base files have different roots`, crashing the build. Setting `incremental = false` in `tasks.withType<KotlinCompile>` eliminates the `relativeTo()` call entirely. This setting is scoped to this library only and has no effect on the host app's own incremental compilation.
+
+
 
 * **Windows (critical fix):** `ResizeImageForCropper` and `CropImageNative` were calling `shared_result->Success/Error()` directly from a background `std::thread`, which violates Flutter Windows SDK threading requirements and caused the app to crash/close when cropping.
   - Added a message-only `HWND_MESSAGE` dispatch window created at plugin init.
