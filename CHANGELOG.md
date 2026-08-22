@@ -1,4 +1,8 @@
-## 0.1.2
+## 0.1.3
+
+* **Android (Windows cross-drive fix — attempt 2):** The previous fix (`compilerOptions { incremental = false }` inside a `KotlinCompile` task) had no effect because the Kotlin daemon reads the incremental flag from Gradle properties, not from task-level compiler options. Added `android/gradle.properties` with `kotlin.incremental=false`. This is the only reliable way to disable Kotlin incremental compilation at the module level. The task-level block has been removed.
+
+
 
 * **Android (Windows fix):** Disabled Kotlin incremental compilation in the plugin's `build.gradle.kts`. Kotlin's incremental compiler uses `File.relativeTo()` to store source paths in its cache. On Windows, when the Pub Cache (`C:\Users\...\AppData\Local\Pub\Cache\`) and the Flutter project are on **different drives** (e.g. `G:\`), `relativeTo()` throws `IllegalArgumentException: this and base files have different roots`, crashing the build. Setting `incremental = false` in `tasks.withType<KotlinCompile>` eliminates the `relativeTo()` call entirely. This setting is scoped to this library only and has no effect on the host app's own incremental compilation.
 

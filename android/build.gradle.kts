@@ -71,20 +71,6 @@ project.extensions.configure(
     }
 }
 
-// ── Cross-drive fix (Windows) ──────────────────────────────────────────────
-// Kotlin's incremental compiler uses File.relativeTo() to store source paths
-// in its cache. On Windows, if the Pub Cache (C:\Users\...\AppData\...) and
-// the project (e.g. G:\Android\...) are on different drives, relativeTo()
-// throws IllegalArgumentException: "this and base files have different roots".
-// Disabling incremental compilation eliminates the relativeTo() call entirely.
-// Build time impact: ~1–3 s extra on subsequent builds (still faster than a
-// full clean). This setting is scoped to this library only.
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    compilerOptions {
-        incremental = false
-    }
-}
-
 dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.mockito:mockito-core:5.0.0")
